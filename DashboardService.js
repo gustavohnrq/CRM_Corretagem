@@ -202,34 +202,38 @@ function calcPortfolioKpis_(start, endEx, data){
   const estoque = data.estoque || [];
   const captacoes = data.captacoes || [];
 
-  const estoqueAtivos = estoque.length;
-  const estoqueValorTotal = estoque.reduce((acc,r)=>acc + dsParseMoney_(pick_(r,["Valor","Preço","Preco"])),0);
-  const estoqueTicketMedio = estoqueAtivos>0 ? estoqueValorTotal/estoqueAtivos : 0;
+  // Empresa (estoque total, sem data)
+  const estoqueDivBairro = groupByBairroCount_(estoque, ["Bairro"], ["Valor","Preço","Preco"]);
+  const estoqueBairrosCom30 = groupByBairroAvg_(estoque, ["Bairro"], ["Valor","Preço","Preco"]).filter(x => x.qtd > 30).slice(0,10);
 
+  // Minha carteira (captações)
+  const carteiraDivBairro = groupByBairroCount_(captacoes, ["Bairro"], ["Valor"]);
+  const carteiraTotalQtd = captacoes.length;
+  const carteiraTotalValor = captacoes.reduce((acc,r)=>acc + dsParseMoney_(pick_(r,["Valor"])),0);
+  const carteiraTicketMedio = carteiraTotalQtd>0 ? (carteiraTotalValor / carteiraTotalQtd) : 0;
+
+  // Meta: 5 captações/mês (no período filtrado)
   const captacoesPeriodo = captacoes.filter(r=>dsInRange_(dsParseDateAny_(pick_(r,["DataCadastro","Data Cadastro"])), start, endEx));
   const captacoesPeriodoQtd = captacoesPeriodo.length;
-  const captacoesCarteiraQtd = captacoes.length;
-  const captacoesTicketCarteira = captacoesCarteiraQtd>0 ? (captacoes.reduce((acc,r)=>acc + dsParseMoney_(pick_(r,["Valor"])),0) / captacoesCarteiraQtd) : 0;
-
-  const byBairroEstoque = groupByBairroCount_(estoque, ["Bairro"], ["Valor","Preço","Preco"]);
-  const byBairroCaptacoes = groupByBairroCount_(captacoes, ["Bairro"], ["Valor"]);
-
-  const top10BairrosCarosEstoque = groupByBairroAvg_(estoque, ["Bairro"], ["Valor","Preço","Preco"]).slice(0,10);
+  const days = Math.max(1, Math.ceil((endEx.getTime() - start.getTime()) / (24*60*60*1000)));
+  const metaPeriodo = 5 * (days / 30);
 
   return {
-    cards:[
-      { key:"est1", title:"Estoque - Imóveis Ativos", value: String(estoqueAtivos), subtitle:"Total em carteira" },
-      { key:"est2", title:"Estoque - Valor Potencial", value: brlValue_(estoqueValorTotal), subtitle:"Soma do estoque" },
-      { key:"cap1", title:"Captações - No Período", value: String(captacoesPeriodoQtd), subtitle:"Dentro do filtro" },
-      { key:"cap2", title:"Captações - Carteira", value: String(captacoesCarteiraQtd), subtitle:"Total cadastrado" }
-    ],
-    bairroDivisao:{
-      estoque: byBairroEstoque,
-      captacoes: byBairroCaptacoes
+    empresa: {
+      divisaoBairro: estoqueDivBairro,
+      topBairrosCom30: estoqueBairrosCom30
     },
-    topBairrosCarosEstoque: top10BairrosCarosEstoque,
-    ticketMedioCaptacoesCarteira: captacoesTicketCarteira,
-    ticketMedioEstoque: estoqueTicketMedio
+    carteira: {
+      divisaoBairro: carteiraDivBairro,
+      ticketMedio: carteiraTicketMedio,
+      totalQtd: carteiraTotalQtd,
+      totalValor: carteiraTotalValor
+    },
+    captacaoMeta: {
+      periodoQtd: captacoesPeriodoQtd,
+      metaPeriodo: metaPeriodo,
+      atingimento: metaPeriodo > 0 ? (captacoesPeriodoQtd / metaPeriodo) : 0
+    }
   };
 }
 

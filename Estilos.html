@@ -1,13 +1,13 @@
 <style>
   :root{
-    --bg:#0b1220;
-    --card:#111a2e;
-    --line:#223155;
-    --text:#e7eefc;
-    --muted:#a9b6d6;
-    --accent:#4da3ff;
-    --danger:#ff5c73;
-    --ok:#37d67a;
+    --bg:#f4f6f9;
+    --card:#ffffff;
+    --line:#d8dee7;
+    --text:#1f2a37;
+    --muted:#64748b;
+    --accent:#2563eb;
+    --danger:#dc2626;
+    --ok:#16a34a;
   }
   *{ box-sizing:border-box; }
   body{
@@ -32,7 +32,7 @@
     border:1px solid var(--line);
     border-radius: 14px;
     padding:14px;
-    box-shadow: 0 8px 22px rgba(0,0,0,.25);
+    box-shadow: 0 6px 18px rgba(15,23,42,.08);
   }
   .card h3{ margin:0 0 10px 0; font-size:14px; }
   label{ display:block; font-size:12px; color:var(--muted); margin:10px 0 6px; }
@@ -41,7 +41,7 @@
     padding:10px 10px;
     border-radius: 10px;
     border:1px solid var(--line);
-    background:#0f1830;
+    background:#ffffff;
     color: var(--text);
     outline:none;
   }
@@ -54,7 +54,7 @@
     border-radius: 12px;
     padding:10px 12px;
     font-weight:700;
-    color:#081022;
+    color:#ffffff;
     background: var(--accent);
   }
   button.secondary{
@@ -62,8 +62,8 @@
     color: var(--text);
     border:1px solid var(--line);
   }
-  button.danger{ background: var(--danger); color:#1a0b11; }
-  button.ok{ background: var(--ok); color:#06140c; }
+  button.danger{ background: var(--danger); color:#ffffff; }
+  button.ok{ background: var(--ok); color:#ffffff; }
 
   .list{
     display:flex; flex-direction:column; gap:8px;
@@ -73,12 +73,12 @@
   }
   .item{
     border:1px solid var(--line);
-    background:#0f1830;
+    background:#ffffff;
     border-radius: 12px;
     padding:10px;
     cursor:pointer;
   }
-  .item:hover{ border-color:#35508a; }
+  .item:hover{ border-color:#94a3b8; }
   .item b{ display:block; font-size:13px; margin-bottom:4px; }
   .item small{ color: var(--muted); }
   .hint{ color:var(--muted); font-size:12px; }
@@ -108,13 +108,13 @@
     padding:8px 0;
     border-radius:10px;
     border:1px solid var(--line);
-    background:#0f1830;
+    background:#ffffff;
     color: var(--text);
     font-weight:700;
   }
   .scoreBtn.active{
     background: var(--accent);
-    color:#081022;
+    color:#ffffff;
     border-color: transparent;
   }
 </style>

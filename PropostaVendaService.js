@@ -42,12 +42,31 @@ function ensureSheetWithHeaders_(ss, sheetName, headers) {
 
 function PV_listVisitasForSelect_v1() {
   ensureSchema_();
-  const rows = DataService.listRecords("Fato_Visitas", "Id_Visita", ["Data_Visita", "Id_Imovel", "Id_Agendamento"]);
+
+  if (typeof RV_ensureSchema_ === "function") {
+    try { RV_ensureSchema_(); } catch (e) {}
+  }
+
+  let rows = [];
+  try {
+    rows = DataService.listRecords("Fato_Visitas", "Id_Visita", ["Data_Visita", "Id_Imovel", "Id_Agendamento"]);
+  } catch (e) {
+    return [];
+  }
+
   return rows.map(r => {
-    const ctx = PV_getVisitaContextById_v1(r.id);
-    const clientes = ctx && ctx.clientes_nomes && ctx.clientes_nomes.length ? ctx.clientes_nomes.join(", ") : "-";
-    const imovel = ctx && ctx.imovel ? ctx.imovel : {};
-    const endereco = imovel["Endereço"] || imovel["Endereco"] || imovel["Quadra/Endereço"] || "-";
+    let clientes = "-";
+    let endereco = "-";
+
+    try {
+      const ctx = PV_getVisitaContextById_v1(r.id);
+      clientes = ctx && ctx.clientes_nomes && ctx.clientes_nomes.length ? ctx.clientes_nomes.join(", ") : "-";
+      const imovel = ctx && ctx.imovel ? ctx.imovel : {};
+      endereco = imovel["Endereço"] || imovel["Endereco"] || imovel["Quadra/Endereço"] || "-";
+    } catch (e) {
+      // fallback: mantém dropdown funcional mesmo sem contexto completo
+    }
+
     return {
       id: r.id,
       label: `Visita ${r.id} • ${r.raw["Data_Visita"] || "-"} • Imóvel ${r.raw["Id_Imovel"] || "-"} • ${clientes}`,

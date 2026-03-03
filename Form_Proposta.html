@@ -114,16 +114,21 @@
       }
 
       function loadVisitas(){
-        google.script.run.withSuccessHandler(items => {
-          const sel = byId("Id_Visita");
-          sel.innerHTML = `<option value="">Selecione...</option>`;
-          (items || []).forEach(it => {
-            const op = document.createElement("option");
-            op.value = it.id;
-            op.textContent = it.label;
-            sel.appendChild(op);
-          });
-        }).PV_listVisitasForSelect_v1();
+        google.script.run
+          .withSuccessHandler(items => {
+            const sel = byId("Id_Visita");
+            sel.innerHTML = `<option value="">Selecione...</option>`;
+            (items || []).forEach(it => {
+              const op = document.createElement("option");
+              op.value = it.id;
+              op.textContent = it.label;
+              sel.appendChild(op);
+            });
+          })
+          .withFailureHandler(err => {
+            toast("Erro ao carregar visitas: " + (err.message || err));
+          })
+          .PV_listVisitasForSelect_v1();
       }
 
       function loadList(){

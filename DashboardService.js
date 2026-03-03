@@ -25,13 +25,15 @@ function getDashboardData(filters){
   const captacoes = readSheetObjects_("Fato_Captacao");
   const estoque = readSheetObjects_("Estoque_Imoveis");
 
+  const perfIndex = dsBuildPerfIndex_({ leadsCompradores, leadsVendedores, visitas, propostas, vendas, captacoes });
+
   const weekly = calcWeeklyControl_(weekStart, weekEnd, {
     leadsCompradores, leadsVendedores, visitas, propostas, captacoes
-  });
+  }, perfIndex);
 
   const monthly = calcMonthlyFunnel_(funilStart, funilEnd, {
     leadsCompradores, leadsVendedores, visitas, propostas, vendas, captacoes
-  });
+  }, perfIndex);
 
   const follow = readFollowUpBucketsByBoards_();
 
@@ -45,8 +47,8 @@ function getDashboardData(filters){
     },
     weekly,
     monthly,
-    kpis: calcKpiCharts_(funilStart, funilEnd, { leadsCompradores, visitas, propostas, vendas, captacoes }),
-    kpisPortfolio: calcPortfolioKpis_(funilStart, funilEnd, { estoque, captacoes }),
+    kpis: calcKpiCharts_(funilStart, funilEnd, { leadsCompradores, visitas, propostas, vendas, captacoes }, perfIndex),
+    kpisPortfolio: calcPortfolioKpis_(funilStart, funilEnd, { estoque, captacoes }, perfIndex),
     follow
   };
 }
@@ -59,7 +61,7 @@ function rebuildFunilMensal(){
   return { ok:true, mode:"on_the_fly" };
 }
 
-function calcWeeklyControl_(start, endEx, data){
+function calcWeeklyControl_(start, endEx, data, idx){
   const metas = {
     ligacoesVendaMin:80, ligacoesVendaMax:120,
     visitasVendaMin:3, visitasVendaMax:5,
@@ -69,24 +71,15 @@ function calcWeeklyControl_(start, endEx, data){
     captacao:1
   };
 
-  const ligVenda = data.leadsCompradores.filter(r=>dsInRange_(dsParseDateAny_(pick_(r,["Data Entrada","DataEntrada"])), start, endEx)).length;
-  const ligCap = data.leadsVendedores.filter(r=>dsInRange_(dsParseDateAny_(pick_(r,["Data Entrada","DataEntrada"])), start, endEx)).length;
+  const perf = idx || dsBuildPerfIndex_(data);
+  const ligVenda = dsCountByRange_(perf.leadsCompradoresDates, start, endEx);
+  const ligCap = dsCountByRange_(perf.leadsVendedoresDates, start, endEx);
 
-  const visitasVenda = data.visitas.filter(r=>{
-    const d = dsParseDateAny_(pick_(r,["Data_Visita","Data Visita","Data"]));
-    const tipo = dsNorm_(pick_(r,["Tipo_Visita","Tipo Visita"]));
-    return dsInRange_(d,start,endEx) && (tipo === "venda" || tipo === "");
-  }).length;
+  const visitasVenda = dsCountVisitasByTipoRange_(perf.visitasEntries, start, endEx, "venda");
+  const visitasCap = dsCountVisitasByTipoRange_(perf.visitasEntries, start, endEx, "captacao");
 
-  const visitasCap = data.visitas.filter(r=>{
-    const d = dsParseDateAny_(pick_(r,["Data_Visita","Data Visita","Data"]));
-    const tipo = dsNorm_(pick_(r,["Tipo_Visita","Tipo Visita"]));
-    return dsInRange_(d,start,endEx) && tipo === "captacao";
-  }).length;
-
-  const propostasVenda = data.propostas.filter(r=>dsInRange_(dsParseDateAny_(pick_(r,["Data"])), start, endEx)).length;
-
-  const captacoesQtd = data.captacoes.filter(r=>dsInRange_(dsParseDateAny_(pick_(r,["DataCadastro","Data Cadastro"])), start, endEx)).length;
+  const propostasVenda = dsCountByRange_(perf.propostasDates, start, endEx);
+  const captacoesQtd = dsCountByRange_(perf.captacoesDates, start, endEx);
 
   return {
     metas,
@@ -101,58 +94,56 @@ function calcWeeklyControl_(start, endEx, data){
   };
 }
 
-function calcMonthlyFunnel_(start, endEx, data){
-  const leads = data.leadsCompradores.filter(r=>dsInRange_(dsParseDateAny_(pick_(r,["Data Entrada"])), start, endEx)).length;
-  const visitas = data.visitas.filter(r=>dsInRange_(dsParseDateAny_(pick_(r,["Data_Visita","Data"])), start, endEx)).length;
-  const propostas = data.propostas.filter(r=>dsInRange_(dsParseDateAny_(pick_(r,["Data"])), start, endEx)).length;
-  const vendas = data.vendas.filter(r=>dsInRange_(dsParseDateAny_(pick_(r,["Data"])), start, endEx)).length;
-  const captacoes = data.captacoes.filter(r=>dsInRange_(dsParseDateAny_(pick_(r,["DataCadastro","Data Cadastro"])), start, endEx)).length;
+function calcMonthlyFunnel_(start, endEx, data, idx){
+  const perf = idx || dsBuildPerfIndex_(data);
+  const leads = dsCountByRange_(perf.leadsCompradoresDates, start, endEx);
+  const visitas = dsCountByRange_(perf.visitasDates, start, endEx);
+  const propostas = dsCountByRange_(perf.propostasDates, start, endEx);
+  const vendas = dsCountByRange_(perf.vendasDates, start, endEx);
+  const captacoes = dsCountByRange_(perf.captacoesDates, start, endEx);
 
   const rates = {
     leads_para_visitas: leads>0 ? visitas/leads : null,
     visitas_para_propostas: visitas>0 ? propostas/visitas : null,
     propostas_para_vendas: propostas>0 ? vendas/propostas : null,
-    lead_vendedor_para_captacao: data.leadsVendedores.length>0 ? captacoes/data.leadsVendedores.length : null
+    lead_vendedor_para_captacao: perf.leadsVendedoresTotal>0 ? captacoes/perf.leadsVendedoresTotal : null
   };
 
   return { funil:{leads,visitas,propostas,vendas,captacoes}, rates };
 }
 
 
-function calcKpiCharts_(start, endEx, data){
+function calcKpiCharts_(start, endEx, data, idx){
   const buckets = buildWeeklyBuckets_(start, endEx);
 
-  const leads = data.leadsCompradores.filter(r=>dsInRange_(dsParseDateAny_(pick_(r,["Data Entrada"])), start, endEx)).length;
-  const visitas = data.visitas.filter(r=>dsInRange_(dsParseDateAny_(pick_(r,["Data_Visita","Data"])), start, endEx)).length;
-  const propostas = data.propostas.filter(r=>dsInRange_(dsParseDateAny_(pick_(r,["Data"])), start, endEx)).length;
-  const vendasRows = data.vendas.filter(r=>dsInRange_(dsParseDateAny_(pick_(r,["Data"])), start, endEx));
-  const vendas = vendasRows.length;
-  const captacoes = data.captacoes.filter(r=>dsInRange_(dsParseDateAny_(pick_(r,["DataCadastro","Data Cadastro"])), start, endEx)).length;
+  const perf = idx || dsBuildPerfIndex_(data);
+  const leads = dsCountByRange_(perf.leadsCompradoresDates, start, endEx);
+  const visitas = dsCountByRange_(perf.visitasDates, start, endEx);
+  const propostas = dsCountByRange_(perf.propostasDates, start, endEx);
+  const vendas = dsCountByRange_(perf.vendasDates, start, endEx);
+  const captacoes = dsCountByRange_(perf.captacoesDates, start, endEx);
 
   const periodDays = Math.max(1, Math.ceil((endEx.getTime()-start.getTime())/(24*60*60*1000)));
 
   const seriesLeadsVisitas = buckets.map(b=>{
-    const l = data.leadsCompradores.filter(r=>dsInRange_(dsParseDateAny_(pick_(r,["Data Entrada"])), b.start, b.end)).length;
-    const v = data.visitas.filter(r=>dsInRange_(dsParseDateAny_(pick_(r,["Data_Visita","Data"])), b.start, b.end)).length;
+    const l = dsCountByRange_(perf.leadsCompradoresDates, b.start, b.end);
+    const v = dsCountByRange_(perf.visitasDates, b.start, b.end);
     return l>0 ? v/l : 0;
   });
 
   const seriesVisitasPropostas = buckets.map(b=>{
-    const v = data.visitas.filter(r=>dsInRange_(dsParseDateAny_(pick_(r,["Data_Visita","Data"])), b.start, b.end)).length;
-    const p = data.propostas.filter(r=>dsInRange_(dsParseDateAny_(pick_(r,["Data"])), b.start, b.end)).length;
+    const v = dsCountByRange_(perf.visitasDates, b.start, b.end);
+    const p = dsCountByRange_(perf.propostasDates, b.start, b.end);
     return v>0 ? p/v : 0;
   });
 
   const seriesPropostasVendas = buckets.map(b=>{
-    const p = data.propostas.filter(r=>dsInRange_(dsParseDateAny_(pick_(r,["Data"])), b.start, b.end)).length;
-    const v = data.vendas.filter(r=>dsInRange_(dsParseDateAny_(pick_(r,["Data"])), b.start, b.end)).length;
+    const p = dsCountByRange_(perf.propostasDates, b.start, b.end);
+    const v = dsCountByRange_(perf.vendasDates, b.start, b.end);
     return p>0 ? v/p : 0;
   });
 
-  const seriesCaptacoesSemana = buckets.map(b=>{
-    const c = data.captacoes.filter(r=>dsInRange_(dsParseDateAny_(pick_(r,["DataCadastro","Data Cadastro"])), b.start, b.end)).length;
-    return c;
-  });
+  const seriesCaptacoesSemana = buckets.map(b=> dsCountByRange_(perf.captacoesDates, b.start, b.end));
 
   const convLeadsVisitas = leads>0 ? visitas/leads : 0;
   const convVisitasPropostas = visitas>0 ? propostas/visitas : 0;
@@ -175,6 +166,52 @@ function calcKpiCharts_(start, endEx, data){
       max: Math.max(1, ...seriesCaptacoesSemana, metaCaptacoesPeriodo, captacoes, 1)
     }
   ];
+}
+
+function dsBuildPerfIndex_(data){
+  const leadsCompradores = data.leadsCompradores || [];
+  const leadsVendedores = data.leadsVendedores || [];
+  const visitas = data.visitas || [];
+  const propostas = data.propostas || [];
+  const vendas = data.vendas || [];
+  const captacoes = data.captacoes || [];
+
+  const visitasEntries = visitas.map(r => ({
+    date: dsParseDateAny_(pick_(r,["Data_Visita","Data Visita","Data"])),
+    tipo: dsNorm_(pick_(r,["Tipo_Visita","Tipo Visita"]))
+  })).filter(x => x.date);
+
+  return {
+    leadsCompradoresDates: leadsCompradores.map(r=>dsParseDateAny_(pick_(r,["Data Entrada","DataEntrada"]))).filter(Boolean),
+    leadsVendedoresDates: leadsVendedores.map(r=>dsParseDateAny_(pick_(r,["Data Entrada","DataEntrada"]))).filter(Boolean),
+    visitasEntries,
+    visitasDates: visitasEntries.map(x=>x.date),
+    propostasDates: propostas.map(r=>dsParseDateAny_(pick_(r,["Data"]))).filter(Boolean),
+    vendasDates: vendas.map(r=>dsParseDateAny_(pick_(r,["Data"]))).filter(Boolean),
+    captacoesDates: captacoes.map(r=>dsParseDateAny_(pick_(r,["DataCadastro","Data Cadastro"]))).filter(Boolean),
+    leadsVendedoresTotal: leadsVendedores.length
+  };
+}
+
+function dsCountByRange_(dates, start, endEx){
+  let n = 0;
+  for (let i=0;i<(dates||[]).length;i++) if (dsInRange_(dates[i], start, endEx)) n++;
+  return n;
+}
+
+function dsCountVisitasByTipoRange_(entries, start, endEx, tipoTarget){
+  let n = 0;
+  const target = dsNorm_(tipoTarget);
+  for (let i=0;i<(entries||[]).length;i++){
+    const e = entries[i];
+    if (!dsInRange_(e.date, start, endEx)) continue;
+    if (target === 'venda') {
+      if (e.tipo === 'venda' || e.tipo === '') n++;
+    } else if (e.tipo === target) {
+      n++;
+    }
+  }
+  return n;
 }
 
 function buildWeeklyBuckets_(start, endEx){
@@ -207,7 +244,7 @@ function numValue_(x){
 }
 
 
-function calcPortfolioKpis_(start, endEx, data){
+function calcPortfolioKpis_(start, endEx, data, idx){
   const estoque = data.estoque || [];
   const captacoes = data.captacoes || [];
 
@@ -222,8 +259,8 @@ function calcPortfolioKpis_(start, endEx, data){
   const carteiraTicketMedio = carteiraTotalQtd>0 ? (carteiraTotalValor / carteiraTotalQtd) : 0;
 
   // Meta: 5 captações/mês (no período filtrado)
-  const captacoesPeriodo = captacoes.filter(r=>dsInRange_(dsParseDateAny_(pick_(r,["DataCadastro","Data Cadastro"])), start, endEx));
-  const captacoesPeriodoQtd = captacoesPeriodo.length;
+  const perf = idx || dsBuildPerfIndex_(data);
+  const captacoesPeriodoQtd = dsCountByRange_(perf.captacoesDates, start, endEx);
   const days = Math.max(1, Math.ceil((endEx.getTime() - start.getTime()) / (24*60*60*1000)));
   const mesesPeriodo = Math.max(1, Math.ceil(days / 30));
   const metaPeriodo = 5 * mesesPeriodo;

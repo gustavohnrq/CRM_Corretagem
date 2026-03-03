@@ -193,6 +193,12 @@ function _pdf_calcNotaMedia_(avaliacoes) {
 
 function _pdf_getBackgroundDataUrl_() {
   const BG_FOLDER_ID = "1fAzFGRc4KCnY2ou-jPhQ9hoiauQj0-Ce";
+  const SUPPORTED_MIME_TYPES = {
+    "image/png": true,
+    "image/jpeg": true,
+    "image/jpg": true,
+    "image/gif": true
+  };
   try {
     const folder = DriveApp.getFolderById(BG_FOLDER_ID);
     const it = folder.getFiles();
@@ -203,7 +209,7 @@ function _pdf_getBackgroundDataUrl_() {
       const f = it.next();
       let ct = "";
       try { ct = String(f.getMimeType() || "").toLowerCase(); } catch (e) { ct = ""; }
-      if (!ct.startsWith("image/")) continue;
+      if (!SUPPORTED_MIME_TYPES[ct]) continue;
 
       const t = (f.getLastUpdated() || f.getDateCreated()).getTime();
       if (t > chosenTime) {

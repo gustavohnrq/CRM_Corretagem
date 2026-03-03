@@ -623,6 +623,63 @@ function LVD_listForPanel_v2() {
   return out;
 }
 
+/**
+ * Form_LeadsVendedores - lista com filtro por Status
+ */
+function LVD_listForPanelFiltered_v1(filters) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sh = ss.getSheetByName("Leads_Vendedores");
+  if (!sh) throw new Error('Aba "Leads_Vendedores" não existe.');
+
+  const lr = sh.getLastRow();
+  const lc = sh.getLastColumn();
+  if (lr < 2 || lc < 1) return [];
+
+  const headers = sh.getRange(1, 1, 1, lc).getValues()[0];
+  const normToIdx = {};
+  headers.forEach((h, i) => {
+    const key = _normHeader_(h);
+    if (key) normToIdx[key] = i;
+  });
+
+  const idxTel = normToIdx[_normHeader_("Telefone")];
+  const idxNome = normToIdx[_normHeader_("Nome Proprietário")];
+  const idxQuadra = normToIdx[_normHeader_("Quadra/Endereço")];
+  const idxStatus = normToIdx[_normHeader_("Status")];
+  if (idxTel === undefined) throw new Error('Leads_Vendedores: coluna "Telefone" não encontrada.');
+
+  const f = filters || {};
+  const statusFilter = String(f.status || "").trim().toLowerCase();
+
+  const data = sh.getRange(2, 1, lr - 1, lc).getValues();
+  const out = [];
+
+  data.forEach(r => {
+    let tel = r[idxTel];
+    if (tel === "" || tel === null || tel === undefined) return;
+
+    if (typeof tel === "number") tel = String(Math.trunc(tel));
+    tel = String(tel).trim();
+
+    const nome = idxNome !== undefined ? String(r[idxNome] ?? "").trim() : "";
+    const quadra = idxQuadra !== undefined ? String(r[idxQuadra] ?? "").trim() : "";
+    const status = idxStatus !== undefined ? String(r[idxStatus] ?? "").trim() : "";
+
+    if (statusFilter && status.toLowerCase() !== statusFilter) return;
+
+    const label = [
+      nome || "(sem nome)",
+      quadra || "(sem endereço)",
+      status || "(sem status)"
+    ].join(" • ");
+
+    out.push({ id: tel, label });
+  });
+
+  out.sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
+  return out;
+}
+
 function LVD_getById_v2(telefoneVal) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sh = ss.getSheetByName("Leads_Vendedores");

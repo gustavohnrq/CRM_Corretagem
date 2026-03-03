@@ -173,7 +173,28 @@ function PV_listPropostasDetailed_v1() {
 
 function PV_getPropostaById_v1(idProposta) {
   ensureSchema_();
-  return DataService.getById("Fato_Proposta", "Id_Proposta", idProposta);
+  const target = String(idProposta || "").trim();
+  if (!target) return null;
+
+  const rows = PV_listSheetByIdRobust_("Fato_Proposta", ["Id_Proposta", "ID_ProPOSTA", "id_proposta"]);
+  const hit = rows.find(r => String(r.id || "").trim() === target);
+  if (!hit) return null;
+
+  const idVisitaRaw = PV_pickByCandidates_(hit.raw, ["Id_Visita", "id_visita"]);
+  const valor = PV_pickByCandidates_(hit.raw, ["Valor da Proposta", "valor_proposta"]);
+  const status = PV_pickByCandidates_(hit.raw, ["status", "Status"]);
+  const modalidade = PV_pickByCandidates_(hit.raw, ["Modalidade de Pagamento", "modalidade_pagamento"]);
+  const data = PV_pickByCandidates_(hit.raw, ["Data", "data"]);
+
+  return {
+    ...hit.raw,
+    "Data": data,
+    "Id_Proposta": target,
+    "Valor da Proposta": valor,
+    "Modalidade de Pagamento": modalidade,
+    "status": status,
+    "Id_Visita": idVisitaRaw
+  };
 }
 
 function PV_getNextIdProposta_v1() {

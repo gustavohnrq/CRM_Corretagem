@@ -69,11 +69,21 @@ function PV_getVisitaContextById_v1(idVisita) {
   return PDF_getVisitaPayload_v1(idVisita);
 }
 
+function PV_tryGetVisitaContext_(idVisita) {
+  const id = String(idVisita || "").trim();
+  if (!id) return null;
+  try {
+    return PV_getVisitaContextById_v1(id);
+  } catch (e) {
+    return null;
+  }
+}
+
 function PV_listPropostasDetailed_v1() {
   ensureSchema_();
   const propostas = DataService.listRecords("Fato_Proposta", "Id_Proposta", ["Data", "Valor da Proposta", "status", "Id_Visita"]);
   return propostas.map(p => {
-    const vis = p.raw["Id_Visita"] ? PV_getVisitaContextById_v1(p.raw["Id_Visita"]) : null;
+    const vis = PV_tryGetVisitaContext_(p.raw["Id_Visita"]);
     const clientes = vis && vis.clientes_nomes ? vis.clientes_nomes.join(", ") : "-";
     const endereco = vis && vis.imovel ? (vis.imovel["Endereço"] || vis.imovel["Endereco"] || vis.imovel["Quadra/Endereço"] || "-") : "-";
     return {
@@ -126,7 +136,7 @@ function PV_getPropostaContextById_v1(idProposta) {
   ensureSchema_();
   const proposta = PV_getPropostaById_v1(idProposta);
   if (!proposta) return null;
-  const visita = proposta["Id_Visita"] ? PV_getVisitaContextById_v1(proposta["Id_Visita"]) : null;
+  const visita = PV_tryGetVisitaContext_(proposta["Id_Visita"]);
   return { proposta, visita };
 }
 
@@ -134,7 +144,12 @@ function PV_listVendasDetailed_v1() {
   ensureSchema_();
   const vendas = DataService.listRecords("Fato_Venda", "Id_Venda", ["Id_Proposta", "Data", "Valor da Venda", "Forma de Pagamento", "Comissão", "Data de Recebimento Comissão"]);
   return vendas.map(v => {
-    const ctx = v.raw["Id_Proposta"] ? PV_getPropostaContextById_v1(v.raw["Id_Proposta"]) : null;
+    let ctx = null;
+    try {
+      ctx = v.raw["Id_Proposta"] ? PV_getPropostaContextById_v1(v.raw["Id_Proposta"]) : null;
+    } catch (e) {
+      ctx = null;
+    }
     const proposta = ctx ? ctx.proposta : null;
     const visita = ctx ? ctx.visita : null;
     const clientes = visita && visita.clientes_nomes ? visita.clientes_nomes.join(", ") : "-";

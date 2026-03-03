@@ -13,7 +13,7 @@
       <div class="btns"><button class="secondary" onclick="nav('Form_Menu')">← Menu</button></div>
     </div>
 
-    <div class="grid">
+    <div class="grid" style="grid-template-columns: 7fr 3fr;">
       <div class="card">
         <h3>Registros de Proposta</h3>
         <div class="btns">
@@ -96,12 +96,18 @@
           return;
         }
 
+        const fato = ctx.fato || {};
+        const agenda = ctx.agenda || {};
         const imv = ctx.imovel || {};
         const end = imv["Endereço"] || imv["Endereco"] || imv["Quadra/Endereço"] || "-";
         const clientes = (ctx.clientes_nomes || []).join(", ") || "-";
+        const bairro = imv["Bairro"] || "-";
+        const cidade = imv["Cidade"] || "-";
         el.innerHTML = `
           <div><b>Visita:</b> ${escapeHtml(ctx.id_visita || "-")} • <b>Data:</b> ${escapeHtml(ctx.data_visita || "-")}</div>
+          <div><b>Agendamento:</b> ${escapeHtml(ctx.id_agendamento || "-")} • <b>Telefone Agenda:</b> ${escapeHtml(agenda["Telefone"] || "-")}</div>
           <div><b>Imóvel:</b> ${escapeHtml(ctx.id_imovel || "-")} • <b>Endereço:</b> ${escapeHtml(end)}</div>
+          <div><b>Bairro/Cidade:</b> ${escapeHtml(bairro)} / ${escapeHtml(cidade)} • <b>Captação:</b> ${escapeHtml(fato["Tipo_Captacao"] || "-")}</div>
           <div><b>Clientes:</b> ${escapeHtml(clientes)}</div>
           <div><b>Nota média da visita:</b> ${ctx.nota_media == null ? "-" : Number(ctx.nota_media).toFixed(2)}</div>
         `;
@@ -134,8 +140,9 @@
             d.className = "item";
             d.innerHTML = `
               <b>${escapeHtml(it.label)}</b>
-              <small>Visita ${escapeHtml(it.raw["Id_Visita"] || "-")} • Clientes: ${escapeHtml(it.enrich.clientes || "-")}</small>
+              <small>Visita ${escapeHtml(it.raw["Id_Visita"] || "-")} • Data visita: ${escapeHtml(it.enrich.dataVisita || "-")} • Agendamento: ${escapeHtml(it.enrich.idAgendamento || "-")}</small>
               <small>Imóvel ${escapeHtml(it.enrich.idImovel || "-")} • ${escapeHtml(it.enrich.endereco || "-")}</small>
+              <small>Clientes: ${escapeHtml(it.enrich.clientes || "-")} • Nota visita: ${it.enrich.notaMediaVisita == null || it.enrich.notaMediaVisita === "" ? "-" : Number(it.enrich.notaMediaVisita).toFixed(2)}</small>
             `;
             d.onclick = () => loadById(it.id);
             el.appendChild(d);

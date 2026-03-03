@@ -13,7 +13,7 @@
       <div class="btns"><button class="secondary" onclick="nav('Form_Menu')">← Menu</button></div>
     </div>
 
-    <div class="grid">
+    <div class="grid" style="grid-template-columns: 7fr 3fr;">
       <div class="card">
         <h3>Registros de Venda</h3>
         <div class="btns">
@@ -100,15 +100,20 @@
 
         const p = ctx.proposta;
         const v = ctx.visita || {};
+        const fato = v.fato || {};
         const imv = v.imovel || {};
         const end = imv["Endereço"] || imv["Endereco"] || imv["Quadra/Endereço"] || "-";
         const clientes = (v.clientes_nomes || []).join(", ") || "-";
+        const bairro = imv["Bairro"] || "-";
+        const cidade = imv["Cidade"] || "-";
 
         el.innerHTML = `
           <div><b>Proposta:</b> ${escapeHtml(p["Id_Proposta"] || "-")} • <b>Status:</b> ${escapeHtml(p["status"] || "-")}</div>
           <div><b>Valor Proposta:</b> ${escapeHtml(String(p["Valor da Proposta"] || "-"))} • <b>Modalidade:</b> ${escapeHtml(String(p["Modalidade de Pagamento"] || "-"))}</div>
           <div><b>Visita:</b> ${escapeHtml(String(p["Id_Visita"] || "-"))} • <b>Data visita:</b> ${escapeHtml(v.data_visita || "-")}</div>
+          <div><b>Agendamento:</b> ${escapeHtml(v.id_agendamento || "-")} • <b>Captação:</b> ${escapeHtml(fato["Tipo_Captacao"] || "-")}</div>
           <div><b>Imóvel:</b> ${escapeHtml(v.id_imovel || "-")} • <b>Endereço:</b> ${escapeHtml(end)}</div>
+          <div><b>Bairro/Cidade:</b> ${escapeHtml(bairro)} / ${escapeHtml(cidade)}</div>
           <div><b>Clientes:</b> ${escapeHtml(clientes)}</div>
         `;
       }
@@ -140,7 +145,9 @@
             d.className = "item";
             d.innerHTML = `
               <b>${escapeHtml(it.label)}</b>
-              <small>Visita ${escapeHtml(it.enrich.visitaId || "-")} • Proposta: ${escapeHtml(String(it.enrich.propostaValor || "-"))}</small>
+              <small>Visita ${escapeHtml(it.enrich.visitaId || "-")} • Data visita: ${escapeHtml(it.enrich.visitaData || "-")} • Imóvel ${escapeHtml(it.enrich.idImovel || "-")}</small>
+              <small>Proposta: ${escapeHtml(String(it.enrich.propostaValor || "-"))} • ${escapeHtml(it.enrich.propostaModalidade || "-")} • ${escapeHtml(it.enrich.propostaStatus || "-")}</small>
+              <small>Comissão: ${escapeHtml(String(it.enrich.comissao || "-"))} • Recebimento: ${escapeHtml(it.enrich.dataRecebimentoComissao || "-")}</small>
               <small>Clientes: ${escapeHtml(it.enrich.clientes || "-")} • ${escapeHtml(it.enrich.endereco || "-")}</small>
             `;
             d.onclick = () => loadById(it.id);

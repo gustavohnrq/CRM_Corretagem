@@ -43,7 +43,20 @@ function ensureSheetWithHeaders_(ss, sheetName, headers) {
 function PV_listVisitasForSelect_v1() {
   ensureSchema_();
   const rows = DataService.listRecords("Fato_Visitas", "Id_Visita", ["Data_Visita", "Id_Imovel", "Id_Agendamento"]);
-  return rows.map(r => ({ id: r.id, label: `Visita ${r.id} • Data ${r.raw["Data_Visita"] || "-"} • Imóvel ${r.raw["Id_Imovel"] || "-"}` }));
+  return rows.map(r => {
+    const ctx = PV_getVisitaContextById_v1(r.id);
+    const clientes = ctx && ctx.clientes_nomes && ctx.clientes_nomes.length ? ctx.clientes_nomes.join(", ") : "-";
+    const imovel = ctx && ctx.imovel ? ctx.imovel : {};
+    const endereco = imovel["Endereço"] || imovel["Endereco"] || imovel["Quadra/Endereço"] || "-";
+    return {
+      id: r.id,
+      label: `Visita ${r.id} • ${r.raw["Data_Visita"] || "-"} • Imóvel ${r.raw["Id_Imovel"] || "-"} • ${clientes}`,
+      enrich: {
+        idAgendamento: r.raw["Id_Agendamento"] || "",
+        endereco: endereco
+      }
+    };
+  });
 }
 
 function PV_getVisitaContextById_v1(idVisita) {
@@ -66,7 +79,9 @@ function PV_listPropostasDetailed_v1() {
         clientes,
         endereco,
         dataVisita: vis ? vis.data_visita : "",
-        idImovel: vis ? vis.id_imovel : ""
+        idImovel: vis ? vis.id_imovel : "",
+        idAgendamento: vis ? vis.id_agendamento : "",
+        notaMediaVisita: vis ? vis.nota_media : ""
       }
     };
   });
@@ -112,7 +127,7 @@ function PV_getPropostaContextById_v1(idProposta) {
 
 function PV_listVendasDetailed_v1() {
   ensureSchema_();
-  const vendas = DataService.listRecords("Fato_Venda", "Id_Venda", ["Id_Proposta", "Data", "Valor da Venda", "Forma de Pagamento"]);
+  const vendas = DataService.listRecords("Fato_Venda", "Id_Venda", ["Id_Proposta", "Data", "Valor da Venda", "Forma de Pagamento", "Comissão", "Data de Recebimento Comissão"]);
   return vendas.map(v => {
     const ctx = v.raw["Id_Proposta"] ? PV_getPropostaContextById_v1(v.raw["Id_Proposta"]) : null;
     const proposta = ctx ? ctx.proposta : null;
@@ -128,8 +143,13 @@ function PV_listVendasDetailed_v1() {
         propostaValor: proposta ? (proposta["Valor da Proposta"] || "-") : "-",
         propostaStatus: proposta ? (proposta["status"] || "-") : "-",
         visitaId: proposta ? (proposta["Id_Visita"] || "-") : "-",
+        propostaModalidade: proposta ? (proposta["Modalidade de Pagamento"] || "-") : "-",
+        visitaData: visita ? (visita.data_visita || "-") : "-",
+        idImovel: visita ? (visita.id_imovel || "-") : "-",
         clientes,
-        endereco
+        endereco,
+        comissao: v.raw["Comissão"] || "-",
+        dataRecebimentoComissao: v.raw["Data de Recebimento Comissão"] || "-"
       }
     };
   });

@@ -12,10 +12,10 @@ function getDashboardData(filters){
   const weekStart = f.weekStart ? dsParseDateAny_(f.weekStart) : startOfWeek_(now);
   const weekEnd = f.weekEnd ? addDays_(dsParseDateAny_(f.weekEnd), 1) : addDays_(weekStart, 7);
 
-  const monthRef = f.monthRef ? dsParseDateAny_(f.monthRef) : now;
-  const monthStart = new Date(monthRef.getFullYear(), monthRef.getMonth(), 1);
-  const monthEnd = new Date(monthRef.getFullYear(), monthRef.getMonth()+1, 1);
-  const monthKey = Utilities.formatDate(monthRef, tz, "yyyy-MM");
+  const funilStart = f.funilStart ? dsParseDateAny_(f.funilStart) : new Date(now.getFullYear(), now.getMonth(), 1);
+  const funilEndInclusive = f.funilEnd ? dsParseDateAny_(f.funilEnd) : now;
+  const funilEnd = addDays_(funilEndInclusive, 1);
+  const monthKey = `${fmtDate_(funilStart)} a ${fmtDate_(funilEndInclusive)}`;
 
   const leadsCompradores = readSheetObjects_("Leads_Compradores");
   const leadsVendedores = readSheetObjects_("Leads_Vendedores");
@@ -28,7 +28,7 @@ function getDashboardData(filters){
     leadsCompradores, leadsVendedores, visitas, propostas, captacoes
   });
 
-  const monthly = calcMonthlyFunnel_(monthStart, monthEnd, {
+  const monthly = calcMonthlyFunnel_(funilStart, funilEnd, {
     leadsCompradores, leadsVendedores, visitas, propostas, vendas, captacoes
   });
 
@@ -38,7 +38,9 @@ function getDashboardData(filters){
     period: {
       weekStart: fmtDate_(weekStart),
       weekEnd: fmtDate_(addDays_(weekEnd, -1)),
-      monthKey
+      monthKey,
+      funilStart: fmtDate_(funilStart),
+      funilEnd: fmtDate_(funilEndInclusive)
     },
     weekly,
     monthly,
@@ -98,25 +100,19 @@ function calcWeeklyControl_(start, endEx, data){
 
 function calcMonthlyFunnel_(start, endEx, data){
   const leads = data.leadsCompradores.filter(r=>dsInRange_(dsParseDateAny_(pick_(r,["Data Entrada"])), start, endEx)).length;
-  const contatos = data.leadsCompradores.filter(r=>{
-    const d = dsParseDateAny_(pick_(r,["Data Entrada"]));
-    const st = dsNorm_(pick_(r,["Status"]));
-    return dsInRange_(d,start,endEx) && st && st !== "novo";
-  }).length;
   const visitas = data.visitas.filter(r=>dsInRange_(dsParseDateAny_(pick_(r,["Data_Visita","Data"])), start, endEx)).length;
   const propostas = data.propostas.filter(r=>dsInRange_(dsParseDateAny_(pick_(r,["Data"])), start, endEx)).length;
   const vendas = data.vendas.filter(r=>dsInRange_(dsParseDateAny_(pick_(r,["Data"])), start, endEx)).length;
   const captacoes = data.captacoes.filter(r=>dsInRange_(dsParseDateAny_(pick_(r,["DataCadastro"])), start, endEx)).length;
 
   const rates = {
-    lead_para_contato: leads>0 ? contatos/leads : null,
-    contato_para_visita: contatos>0 ? visitas/contatos : null,
-    visita_para_proposta: visitas>0 ? propostas/visitas : null,
-    proposta_para_venda: propostas>0 ? vendas/propostas : null,
+    leads_para_visitas: leads>0 ? visitas/leads : null,
+    visitas_para_propostas: visitas>0 ? propostas/visitas : null,
+    propostas_para_vendas: propostas>0 ? vendas/propostas : null,
     lead_vendedor_para_captacao: data.leadsVendedores.length>0 ? captacoes/data.leadsVendedores.length : null
   };
 
-  return { funil:{leads,contatos,visitas,propostas,vendas,captacoes}, rates };
+  return { funil:{leads,visitas,propostas,vendas,captacoes}, rates };
 }
 
 function readFollowUpBucketsByBoards_(){

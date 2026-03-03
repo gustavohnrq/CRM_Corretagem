@@ -52,7 +52,11 @@
         </div>
 
         <div class="card" style="margin:0;">
-          <h3>Funil Mensal (cálculo em código)</h3>
+          <h3>Funil de Conversão</h3>
+          <div class="row">
+            <div><label>Período (início)</label><input id="fFunilIni" type="date" /></div>
+            <div><label>Período (fim)</label><input id="fFunilFim" type="date" /></div>
+          </div>
           <div class="hint" id="kpiMensal"></div>
           <div style="margin-top:10px; overflow:auto;">
             <table style="width:100%; border-collapse:collapse; font-size:12px;">
@@ -98,13 +102,13 @@
         google.script.run
           .withSuccessHandler(renderDashboard)
           .withFailureHandler(err => toast("Erro no painel: " + (err.message || err)))
-          .getDashboardData({ weekStart: byId("fSemanaIni")?.value || "", weekEnd: byId("fSemanaFim")?.value || "" });
+          .getDashboardData({ weekStart: byId("fSemanaIni")?.value || "", weekEnd: byId("fSemanaFim")?.value || "", funilStart: byId("fFunilIni")?.value || "", funilEnd: byId("fFunilFim")?.value || "" });
       }
 
 
       function renderDashboard(d){
         byId("kpiSemanal").innerHTML = `Período semanal: <b>${escapeHtml(d.period.weekStart)}</b> até <b>${escapeHtml(d.period.weekEnd)}</b>`;
-        byId("kpiMensal").innerHTML = `Mês ${escapeHtml(d.period.monthKey)} • Vendas: <b>${nfmt(d.monthly.funil.vendas)}</b> • Captações: <b>${nfmt(d.monthly.funil.captacoes)}</b>`;
+        byId("kpiMensal").innerHTML = `Período: <b>${escapeHtml(d.period.funilStart)}</b> até <b>${escapeHtml(d.period.funilEnd)}</b> • Vendas: <b>${nfmt(d.monthly.funil.vendas)}</b> • Captações: <b>${nfmt(d.monthly.funil.captacoes)}</b>`;
 
         const tb = byId("tblSemanal"); tb.innerHTML = "";
         (d.weekly.rows || []).forEach(r=>{
@@ -116,7 +120,7 @@
 
         const tf = byId("tblFunil"); tf.innerHTML = "";
         const f=d.monthly.funil, rates=d.monthly.rates;
-        [["Leads",f.leads,null],["Contatos",f.contatos,rates.lead_para_contato],["Visitas",f.visitas,rates.contato_para_visita],["Propostas",f.propostas,rates.visita_para_proposta],["Vendas",f.vendas,rates.proposta_para_venda],["Captações",f.captacoes,rates.lead_vendedor_para_captacao]].forEach(([name,qty,rate])=>{
+        [["Leads",f.leads,rates.leads_para_visitas],["Visitas",f.visitas,rates.visitas_para_propostas],["Propostas",f.propostas,rates.propostas_para_vendas],["Vendas",f.vendas,null],["Captações",f.captacoes,rates.lead_vendedor_para_captacao]].forEach(([name,qty,rate])=>{
           const tr=document.createElement("tr");
           tr.innerHTML=`<td style="padding:8px; border-bottom:1px solid rgba(34,49,85,.35)">${escapeHtml(name)}</td><td style="padding:8px; text-align:right; border-bottom:1px solid rgba(34,49,85,.35)">${nfmt(qty)}</td><td style="padding:8px; text-align:right; border-bottom:1px solid rgba(34,49,85,.35)">${rate===null?"-":pct(rate)}</td>`;
           tf.appendChild(tr);
@@ -148,7 +152,9 @@
         });
       }
 
-      (()=>{ const t=new Date(); const day=t.getDay(); const diff=(day===0?6:day-1); const monday=new Date(t.getTime()-diff*86400000); const sunday=new Date(monday.getTime()+6*86400000); const fmt=(d)=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; byId("fSemanaIni").value=fmt(monday); byId("fSemanaFim").value=fmt(sunday); })();
+      (()=>{ const t=new Date(); const day=t.getDay(); const diff=(day===0?6:day-1); const monday=new Date(t.getTime()-diff*86400000); const sunday=new Date(monday.getTime()+6*86400000); const fmt=(d)=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; byId("fSemanaIni").value=fmt(monday); byId("fSemanaFim").value=fmt(sunday);
+      const firstDay = new Date(t.getFullYear(), t.getMonth(), 1);
+      byId("fFunilIni").value=fmt(firstDay); byId("fFunilFim").value=fmt(t); })();
       refreshDashboard();
     </script>
   </body>

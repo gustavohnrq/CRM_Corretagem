@@ -85,16 +85,19 @@
       }
 
       function loadList(){
-        google.script.run.withSuccessHandler(items=>{
-          const el = byId("list"); el.innerHTML = "";
-          if (!items || !items.length){ el.innerHTML = `<div class="hint">Sem captações.</div>`; return; }
-          items.forEach(it=>{
-            const d=document.createElement("div"); d.className="item";
-            d.innerHTML = `<b>${escapeHtml(it.label || it.id)}</b><small>${escapeHtml(it.raw["Bairro"]||"-")} • ${escapeHtml(it.raw["Valor"]||"-")}</small>`;
-            d.onclick=()=>loadById(it.id);
-            el.appendChild(d);
-          });
-        }).listRecords(SHEET, IDCOL, ["Tipo","Bairro","Valor"]);
+        google.script.run
+          .withSuccessHandler(items=>{
+            const el = byId("list"); el.innerHTML = "";
+            if (!items || !items.length){ el.innerHTML = `<div class="hint">Sem captações.</div>`; return; }
+            items.forEach(it=>{
+              const d=document.createElement("div"); d.className="item";
+              d.innerHTML = `<b>${escapeHtml(it.label || it.id)}</b><small>${escapeHtml((it.raw && it.raw["Bairro"])||"-")} • ${escapeHtml((it.raw && it.raw["Valor"])||"-")}</small>`;
+              d.onclick=()=>loadById(it.id);
+              el.appendChild(d);
+            });
+          })
+          .withFailureHandler(err=>toast("Erro ao listar captações: " + (err.message || err)))
+          .CAP_listForPanel_v1();
       }
 
       function loadById(id){

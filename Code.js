@@ -1991,6 +1991,70 @@ function EST_getDistinctFilters_v1() {
  * filters = { bairro?:string, quartos?:string, vmin?:number|null, vmax?:number|null }
  * Retorna [{id,label,raw}]
  */
+
+
+function CAP_listForPanel_v1() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sh = ss.getSheetByName("Fato_Captacao");
+  if (!sh) return [];
+
+  const lr = sh.getLastRow();
+  const lc = sh.getLastColumn();
+  if (lr < 2 || lc < 1) return [];
+
+  const headers = sh.getRange(1, 1, 1, lc).getDisplayValues()[0].map(h => String(h || "").trim());
+  const normToIdx = {};
+  headers.forEach((h, i) => {
+    const k = _normHeader_(h).replace(/\s+/g, "");
+    if (k) normToIdx[k] = i;
+  });
+
+  function idxByCandidates_(arr) {
+    for (let i = 0; i < arr.length; i++) {
+      const k = _normHeader_(arr[i]).replace(/\s+/g, "");
+      if (normToIdx[k] !== undefined) return normToIdx[k];
+    }
+    return undefined;
+  }
+
+  const idxId = idxByCandidates_(["Código", "Codigo", "ID", "Id", "id"]);
+  if (idxId === undefined) throw new Error('Fato_Captacao: coluna de ID não encontrada (Código/Codigo/ID).');
+
+  const idxTipo = idxByCandidates_(["Tipo"]);
+  const idxBairro = idxByCandidates_(["Bairro"]);
+  const idxValor = idxByCandidates_(["Valor"]);
+  const idxCaptadores = idxByCandidates_(["Captadores"]);
+
+  const range = sh.getRange(2, 1, lr - 1, lc);
+  const vals = range.getValues();
+  const disp = range.getDisplayValues();
+
+  const out = [];
+  for (let i = 0; i < vals.length; i++) {
+    const id = String(vals[i][idxId] ?? "").trim() || String(disp[i][idxId] ?? "").trim();
+    if (!id) continue;
+
+    const tipo = idxTipo !== undefined ? String(vals[i][idxTipo] ?? "").trim() : "";
+    const bairro = idxBairro !== undefined ? String(vals[i][idxBairro] ?? "").trim() : "";
+    const valorDisp = idxValor !== undefined ? String(disp[i][idxValor] ?? "").trim() : "";
+    const captadores = idxCaptadores !== undefined ? String(vals[i][idxCaptadores] ?? "").trim() : "";
+
+    out.push({
+      id,
+      label: `${captadores || "-"} • ${tipo || "-"} • ${bairro || "-"} • ${valorDisp || "-"}`,
+      raw: {
+        "Código": id,
+        "Captadores": captadores,
+        "Tipo": tipo,
+        "Bairro": bairro,
+        "Valor": valorDisp
+      }
+    });
+  }
+
+  out.sort((a,b)=> String(a.label || "").localeCompare(String(b.label || ""), "pt-BR"));
+  return out;
+}
 function EST_listForPanelFiltered_v1(filters) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sh = ss.getSheetByName(EST_CFG.SHEET);

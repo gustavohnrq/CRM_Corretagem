@@ -1521,6 +1521,7 @@ function PDF_getFolderId_() {
 
 function _PDF_buildClientesPorVisita_() {
   const out = {};
+  const cleanNome_ = (s) => String(s || "").trim().replace(/^cliente\s+/i, "").trim();
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const shA = ss.getSheetByName("Fato_Avaliacao");
@@ -1547,7 +1548,8 @@ function _PDF_buildClientesPorVisita_() {
     shC.getRange(2, 1, lrC - 1, lcC).getValues().forEach(r => {
       const id = String(r[idxCID] ?? "").trim();
       if (!id) return;
-      cliMap[id] = String(r[idxNome] ?? "").trim() || ("Cliente " + id);
+      const nome = cleanNome_(r[idxNome]);
+      cliMap[id] = nome || id;
     });
 
     shA.getRange(2, 1, lrA - 1, lcA).getValues().forEach(r => {
@@ -1555,10 +1557,26 @@ function _PDF_buildClientesPorVisita_() {
       const idc = String(r[idxACli] ?? "").trim();
       if (!idv || !idc) return;
       if (!out[idv]) out[idv] = new Set();
-      out[idv].add(cliMap[idc] || ("Cliente " + idc));
+      out[idv].add(cliMap[idc] || idc);
     });
   } catch (e) {}
   return out;
+}
+
+function _PDF_getBackgroundDataUrl_() {
+  const linkOrId = "https://drive.google.com/file/d/1hz0s32GBLXxQfZcetfIMrCuQS4gKGHmI/view?usp=sharing";
+  const raw = String(linkOrId || "").trim();
+  if (!raw) return "";
+  const m = raw.match(/(?:\/d\/|id=)([a-zA-Z0-9_-]{10,})/);
+  const id = m ? m[1] : raw;
+  try {
+    const blob = DriveApp.getFileById(id).getBlob();
+    const ct = blob.getContentType() || "image/png";
+    const b64 = Utilities.base64Encode(blob.getBytes());
+    return `data:${ct};base64,${b64}`;
+  } catch (e) {
+    return "";
+  }
 }
 
 function PDF_listVisitasForSelect_v1() {
@@ -1598,7 +1616,7 @@ function PDF_listVisitasForSelect_v1() {
     const nomes = clientesPorVisita[String(idv).trim()]
       ? Array.from(clientesPorVisita[String(idv).trim()]).join(", ")
       : "(sem clientes)";
-    const label = `Clientes: ${nomes} • Data: ${data || "(sem data)"}`;
+    const label = `${nomes} • Data: ${data || "(sem data)"}`;
     out.push({ id: String(idv).trim(), label });
   }
 
@@ -1650,7 +1668,7 @@ function PDF_getVisitaPayload_v1(idVisita) {
           shCli.getRange(2, 1, lr - 1, lc).getValues().forEach(r => {
             const id = String(r[idxId] ?? "").trim();
             if (!id) return;
-            const nome = String(r[idxNome] ?? "").trim();
+            const nome = String(r[idxNome] ?? "").trim().replace(/^cliente\s+/i, "").trim();
             clientesMap[id] = nome || id;
           });
         }
@@ -1660,7 +1678,8 @@ function PDF_getVisitaPayload_v1(idVisita) {
 
   avaliacoes = (avaliacoes || []).map(a => {
     const idc = String(a["Id_Cliente"] || "").trim();
-    return { ...a, Cliente_Nome: clientesMap[idc] || idc || "" };
+    const nome = String(clientesMap[idc] || idc || "").replace(/^cliente\s+/i, "").trim();
+    return { ...a, Cliente_Nome: nome };
   });
 
   const notasGerais = avaliacoes
@@ -1685,7 +1704,8 @@ function PDF_getVisitaPayload_v1(idVisita) {
     agenda,
     avaliacoes,
     nota_media: notaMedia,
-    clientes_nomes: clientesNomes
+    clientes_nomes: clientesNomes,
+    bg_data_url: _PDF_getBackgroundDataUrl_()
   };
 }
 

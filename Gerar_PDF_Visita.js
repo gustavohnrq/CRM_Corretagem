@@ -194,6 +194,7 @@ function _pdf_buildClientesPorVisita_() {
   const S = PDF_CFG.SHEETS;
   const K = PDF_CFG.KEYS;
   const out = {};
+  const cleanNome_ = (s) => String(s || "").trim().replace(/^cliente\s+/i, "").trim();
 
   const avs = _pdf_getAllObjects_(S.AVAL);
   const clientes = _pdf_getAllObjects_(S.CLIENTES);
@@ -202,7 +203,8 @@ function _pdf_buildClientesPorVisita_() {
   clientes.forEach(c => {
     const idc = String(c[K.CLI_ID] || "").trim();
     if (!idc) return;
-    cliMap[idc] = String(c[K.CLI_NOME] || "").trim() || ("Cliente " + idc);
+    const nome = cleanNome_(c[K.CLI_NOME]);
+    cliMap[idc] = nome || idc;
   });
 
   avs.forEach(a => {
@@ -210,7 +212,7 @@ function _pdf_buildClientesPorVisita_() {
     const idc = String(a[K.AVAL_ID_CLIENTE] || "").trim();
     if (!idv || !idc) return;
     if (!out[idv]) out[idv] = new Set();
-    out[idv].add(cliMap[idc] || ("Cliente " + idc));
+    out[idv].add(cliMap[idc] || idc);
   });
 
   return out;
@@ -238,7 +240,7 @@ function PDF_listVisitasForSelect_v1() {
 
       return {
         id: idv,
-        label: `Clientes: ${nomes} • Data: ${data || "-"}`
+        label: `${nomes} • Data: ${data || "-"}`
       };
     })
     .filter(Boolean);
@@ -297,7 +299,7 @@ function PDF_getVisitaPayload_v1(idVisita) {
     const info = cliMap[idc] || null;
     return {
       ...a,
-      Cliente_Nome: info ? info.nome : (idc || "")
+      Cliente_Nome: String(info ? info.nome : (idc || "")).replace(/^cliente\s+/i, "").trim()
     };
   });
 
@@ -305,6 +307,20 @@ function PDF_getVisitaPayload_v1(idVisita) {
   const clientes_nomes = Array.from(new Set(
     avsEnriched.map(a => String(a.Cliente_Nome || "").trim()).filter(Boolean)
   ));
+
+  const bg_data_url = (function(){
+    const raw = "https://drive.google.com/file/d/1hz0s32GBLXxQfZcetfIMrCuQS4gKGHmI/view?usp=sharing";
+    const m = String(raw).match(/(?:\/d\/|id=)([a-zA-Z0-9_-]{10,})/);
+    const id = m ? m[1] : String(raw).trim();
+    try {
+      const blob = DriveApp.getFileById(id).getBlob();
+      const ct = blob.getContentType() || "image/png";
+      const b64 = Utilities.base64Encode(blob.getBytes());
+      return `data:${ct};base64,${b64}`;
+    } catch (e) {
+      return "";
+    }
+  })();
 
   return {
     id_visita: idv,
@@ -319,7 +335,8 @@ function PDF_getVisitaPayload_v1(idVisita) {
     imovel: imovel,
     agenda: agenda,
     avaliacoes: avsEnriched,
-    clientes_nomes
+    clientes_nomes,
+    bg_data_url
   };
 }
 

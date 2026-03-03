@@ -1573,8 +1573,10 @@ function _PDF_getBackgroundDataUrl_() {
 
     while (it.hasNext()) {
       const f = it.next();
-      const name = String(f.getName() || "");
-      if (!/\.(png|jpg|jpeg|webp)$/i.test(name)) continue;
+      let ct = "";
+      try { ct = String(f.getMimeType() || "").toLowerCase(); } catch (e) { ct = ""; }
+      if (!ct.startsWith("image/")) continue;
+
       const t = (f.getLastUpdated() || f.getDateCreated()).getTime();
       if (t > chosenTime) {
         chosen = f;

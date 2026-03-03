@@ -78,7 +78,7 @@
     </style>
   </head>
   <body>
-    <? const d = data || {}; ?>
+    <? const d = (typeof data !== "undefined" && data) ? data : {}; ?>
     <? const fato = d.fato || {}; ?>
     <? const imv = d.imovel || null; ?>
     <? const ag = d.agenda || null; ?>

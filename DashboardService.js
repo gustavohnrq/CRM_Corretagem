@@ -157,7 +157,8 @@ function calcKpiCharts_(start, endEx, data){
   const convLeadsVisitas = leads>0 ? visitas/leads : 0;
   const convVisitasPropostas = visitas>0 ? propostas/visitas : 0;
   const convPropostasVendas = propostas>0 ? vendas/propostas : 0;
-  const metaCaptacoesPeriodo = 5 * (periodDays / 30);
+  const mesesPeriodo = Math.max(1, Math.ceil(periodDays / 30));
+  const metaCaptacoesPeriodo = 5 * mesesPeriodo;
 
   return [
     { key:"kpi1", title:"Conversão Leads → Visitas", value: convLeadsVisitas, display: pctValue_(convLeadsVisitas), target: 0.15, targetDisplay:"Meta 15%", series: seriesLeadsVisitas, max: 1 },
@@ -169,7 +170,7 @@ function calcKpiCharts_(start, endEx, data){
       value: captacoes,
       display: numValue_(captacoes),
       target: metaCaptacoesPeriodo,
-      targetDisplay:`Meta proporcional (5/mês): ${numValue_(metaCaptacoesPeriodo)}`,
+      targetDisplay:`Meta do período (${mesesPeriodo} mês(es) × 5): ${numValue_(metaCaptacoesPeriodo)}`,
       series: seriesCaptacoesSemana,
       max: Math.max(1, ...seriesCaptacoesSemana, metaCaptacoesPeriodo, captacoes, 1)
     }
@@ -224,7 +225,8 @@ function calcPortfolioKpis_(start, endEx, data){
   const captacoesPeriodo = captacoes.filter(r=>dsInRange_(dsParseDateAny_(pick_(r,["DataCadastro","Data Cadastro"])), start, endEx));
   const captacoesPeriodoQtd = captacoesPeriodo.length;
   const days = Math.max(1, Math.ceil((endEx.getTime() - start.getTime()) / (24*60*60*1000)));
-  const metaPeriodo = 5 * (days / 30);
+  const mesesPeriodo = Math.max(1, Math.ceil(days / 30));
+  const metaPeriodo = 5 * mesesPeriodo;
 
   return {
     empresa: {
@@ -239,6 +241,7 @@ function calcPortfolioKpis_(start, endEx, data){
     },
     captacaoMeta: {
       periodoQtd: captacoesPeriodoQtd,
+      mesesPeriodo: mesesPeriodo,
       metaPeriodo: metaPeriodo,
       atingimento: metaPeriodo > 0 ? (captacoesPeriodoQtd / metaPeriodo) : 0
     }

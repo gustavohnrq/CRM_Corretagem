@@ -206,8 +206,8 @@
         const totalValor = data.carteira ? (data.carteira.totalValor || 0) : 0;
         byId("ticketCarteiraCaptacao").innerHTML = `Ticket médio da carteira: <b>${formatBRLNum(ticket)}</b> • (${totalQtd} captações / ${formatBRLNum(totalValor)})`;
 
-        const meta = data.captacaoMeta || { periodoQtd:0, metaPeriodo:0, atingimento:0 };
-        byId("metaCaptacaoMes").innerHTML = `Captações no período: <b>${meta.periodoQtd || 0}</b> • Meta equivalente (5/mês): <b>${(Math.round((meta.metaPeriodo||0)*10)/10).toString().replace('.',',')}</b> • Atingimento: <b>${Math.round((meta.atingimento||0)*100)}%</b>`;
+        const meta = data.captacaoMeta || { periodoQtd:0, mesesPeriodo:1, metaPeriodo:0, atingimento:0 };
+        byId("metaCaptacaoMes").innerHTML = `Captações no período: <b>${meta.periodoQtd || 0}</b> • Meta do período (${meta.mesesPeriodo || 1} mês(es) × 5): <b>${Math.round(meta.metaPeriodo || 0)}</b> • Atingimento: <b>${Math.round((meta.atingimento||0)*100)}%</b>`;
       }
 
       function renderSimpleList(elId, arr, mapFn){

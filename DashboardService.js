@@ -106,7 +106,7 @@ function calcMonthlyFunnel_(start, endEx, data){
   const visitas = data.visitas.filter(r=>dsInRange_(dsParseDateAny_(pick_(r,["Data_Visita","Data"])), start, endEx)).length;
   const propostas = data.propostas.filter(r=>dsInRange_(dsParseDateAny_(pick_(r,["Data"])), start, endEx)).length;
   const vendas = data.vendas.filter(r=>dsInRange_(dsParseDateAny_(pick_(r,["Data"])), start, endEx)).length;
-  const captacoes = data.captacoes.filter(r=>dsInRange_(dsParseDateAny_(pick_(r,["DataCadastro"])), start, endEx)).length;
+  const captacoes = data.captacoes.filter(r=>dsInRange_(dsParseDateAny_(pick_(r,["DataCadastro","Data Cadastro"])), start, endEx)).length;
 
   const rates = {
     leads_para_visitas: leads>0 ? visitas/leads : null,
@@ -127,10 +127,9 @@ function calcKpiCharts_(start, endEx, data){
   const propostas = data.propostas.filter(r=>dsInRange_(dsParseDateAny_(pick_(r,["Data"])), start, endEx)).length;
   const vendasRows = data.vendas.filter(r=>dsInRange_(dsParseDateAny_(pick_(r,["Data"])), start, endEx));
   const vendas = vendasRows.length;
-  const captacoes = data.captacoes.filter(r=>dsInRange_(dsParseDateAny_(pick_(r,["DataCadastro"])), start, endEx)).length;
+  const captacoes = data.captacoes.filter(r=>dsInRange_(dsParseDateAny_(pick_(r,["DataCadastro","Data Cadastro"])), start, endEx)).length;
 
   const periodDays = Math.max(1, Math.ceil((endEx.getTime()-start.getTime())/(24*60*60*1000)));
-  const weeksInPeriod = Math.max(1, periodDays / 7);
 
   const seriesLeadsVisitas = buckets.map(b=>{
     const l = data.leadsCompradores.filter(r=>dsInRange_(dsParseDateAny_(pick_(r,["Data Entrada"])), b.start, b.end)).length;
@@ -151,20 +150,29 @@ function calcKpiCharts_(start, endEx, data){
   });
 
   const seriesCaptacoesSemana = buckets.map(b=>{
-    const c = data.captacoes.filter(r=>dsInRange_(dsParseDateAny_(pick_(r,["DataCadastro"])), b.start, b.end)).length;
+    const c = data.captacoes.filter(r=>dsInRange_(dsParseDateAny_(pick_(r,["DataCadastro","Data Cadastro"])), b.start, b.end)).length;
     return c;
   });
 
   const convLeadsVisitas = leads>0 ? visitas/leads : 0;
   const convVisitasPropostas = visitas>0 ? propostas/visitas : 0;
   const convPropostasVendas = propostas>0 ? vendas/propostas : 0;
-  const captacoesPorSemana = captacoes / weeksInPeriod;
+  const metaCaptacoesPeriodo = 5 * (periodDays / 30);
 
   return [
     { key:"kpi1", title:"Conversão Leads → Visitas", value: convLeadsVisitas, display: pctValue_(convLeadsVisitas), target: 0.15, targetDisplay:"Meta 15%", series: seriesLeadsVisitas, max: 1 },
     { key:"kpi2", title:"Conversão Visitas → Propostas", value: convVisitasPropostas, display: pctValue_(convVisitasPropostas), target: 0.35, targetDisplay:"Meta 35%", series: seriesVisitasPropostas, max: 1 },
     { key:"kpi3", title:"Conversão Propostas → Vendas", value: convPropostasVendas, display: pctValue_(convPropostasVendas), target: 0.30, targetDisplay:"Meta 30%", series: seriesPropostasVendas, max: 1 },
-    { key:"kpi4", title:"Captações por Semana", value: captacoesPorSemana, display: numValue_(captacoesPorSemana), target: 1, targetDisplay:"Meta 1/semana", series: seriesCaptacoesSemana, max: Math.max(1, ...seriesCaptacoesSemana, 1) }
+    {
+      key:"kpi4",
+      title:"Captações no Período",
+      value: captacoes,
+      display: numValue_(captacoes),
+      target: metaCaptacoesPeriodo,
+      targetDisplay:`Meta proporcional (5/mês): ${numValue_(metaCaptacoesPeriodo)}`,
+      series: seriesCaptacoesSemana,
+      max: Math.max(1, ...seriesCaptacoesSemana, metaCaptacoesPeriodo, captacoes, 1)
+    }
   ];
 }
 

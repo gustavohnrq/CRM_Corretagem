@@ -44,6 +44,7 @@ function getDashboardData(filters){
     },
     weekly,
     monthly,
+    kpis: calcKpiCharts_(funilStart, funilEnd, { leadsCompradores, visitas, propostas, vendas, captacoes }),
     follow
   };
 }
@@ -113,6 +114,85 @@ function calcMonthlyFunnel_(start, endEx, data){
   };
 
   return { funil:{leads,visitas,propostas,vendas,captacoes}, rates };
+}
+
+
+function calcKpiCharts_(start, endEx, data){
+  const buckets = buildWeeklyBuckets_(start, endEx);
+
+  const leads = data.leadsCompradores.filter(r=>dsInRange_(dsParseDateAny_(pick_(r,["Data Entrada"])), start, endEx)).length;
+  const visitas = data.visitas.filter(r=>dsInRange_(dsParseDateAny_(pick_(r,["Data_Visita","Data"])), start, endEx)).length;
+  const propostas = data.propostas.filter(r=>dsInRange_(dsParseDateAny_(pick_(r,["Data"])), start, endEx)).length;
+  const vendasRows = data.vendas.filter(r=>dsInRange_(dsParseDateAny_(pick_(r,["Data"])), start, endEx));
+  const vendas = vendasRows.length;
+  const captacoes = data.captacoes.filter(r=>dsInRange_(dsParseDateAny_(pick_(r,["DataCadastro"])), start, endEx)).length;
+
+  const periodDays = Math.max(1, Math.ceil((endEx.getTime()-start.getTime())/(24*60*60*1000)));
+  const weeksInPeriod = Math.max(1, periodDays / 7);
+
+  const seriesLeadsVisitas = buckets.map(b=>{
+    const l = data.leadsCompradores.filter(r=>dsInRange_(dsParseDateAny_(pick_(r,["Data Entrada"])), b.start, b.end)).length;
+    const v = data.visitas.filter(r=>dsInRange_(dsParseDateAny_(pick_(r,["Data_Visita","Data"])), b.start, b.end)).length;
+    return l>0 ? v/l : 0;
+  });
+
+  const seriesVisitasPropostas = buckets.map(b=>{
+    const v = data.visitas.filter(r=>dsInRange_(dsParseDateAny_(pick_(r,["Data_Visita","Data"])), b.start, b.end)).length;
+    const p = data.propostas.filter(r=>dsInRange_(dsParseDateAny_(pick_(r,["Data"])), b.start, b.end)).length;
+    return v>0 ? p/v : 0;
+  });
+
+  const seriesPropostasVendas = buckets.map(b=>{
+    const p = data.propostas.filter(r=>dsInRange_(dsParseDateAny_(pick_(r,["Data"])), b.start, b.end)).length;
+    const v = data.vendas.filter(r=>dsInRange_(dsParseDateAny_(pick_(r,["Data"])), b.start, b.end)).length;
+    return p>0 ? v/p : 0;
+  });
+
+  const seriesCaptacoesSemana = buckets.map(b=>{
+    const c = data.captacoes.filter(r=>dsInRange_(dsParseDateAny_(pick_(r,["DataCadastro"])), b.start, b.end)).length;
+    return c;
+  });
+
+  const convLeadsVisitas = leads>0 ? visitas/leads : 0;
+  const convVisitasPropostas = visitas>0 ? propostas/visitas : 0;
+  const convPropostasVendas = propostas>0 ? vendas/propostas : 0;
+  const captacoesPorSemana = captacoes / weeksInPeriod;
+
+  return [
+    { key:"kpi1", title:"Conversão Leads → Visitas", value: convLeadsVisitas, display: pctValue_(convLeadsVisitas), target: 0.15, targetDisplay:"Meta 15%", series: seriesLeadsVisitas, max: 1 },
+    { key:"kpi2", title:"Conversão Visitas → Propostas", value: convVisitasPropostas, display: pctValue_(convVisitasPropostas), target: 0.35, targetDisplay:"Meta 35%", series: seriesVisitasPropostas, max: 1 },
+    { key:"kpi3", title:"Conversão Propostas → Vendas", value: convPropostasVendas, display: pctValue_(convPropostasVendas), target: 0.30, targetDisplay:"Meta 30%", series: seriesPropostasVendas, max: 1 },
+    { key:"kpi4", title:"Captações por Semana", value: captacoesPorSemana, display: numValue_(captacoesPorSemana), target: 1, targetDisplay:"Meta 1/semana", series: seriesCaptacoesSemana, max: Math.max(1, ...seriesCaptacoesSemana, 1) }
+  ];
+}
+
+function buildWeeklyBuckets_(start, endEx){
+  const out = [];
+  let cur = new Date(start);
+  while (cur < endEx){
+    const next = addDays_(cur, 7);
+    out.push({ start:new Date(cur), end: next < endEx ? next : new Date(endEx) });
+    cur = next;
+    if (out.length > 24) break;
+  }
+  if (!out.length) out.push({ start:new Date(start), end:new Date(endEx) });
+  return out;
+}
+
+function dsParseMoney_(v){
+  const s = String(v || "").trim();
+  if (!s) return 0;
+  const n = Number(s.replace(/[R$\s]/g,"").replace(/\./g,"").replace(",","."));
+  return isNaN(n) ? 0 : n;
+}
+
+function pctValue_(x){
+  return `${Math.round((Number(x)||0)*1000)/10}%`;
+}
+
+function numValue_(x){
+  const n = Number(x||0);
+  return (Math.round(n*100)/100).toString().replace('.', ',');
 }
 
 function readFollowUpBucketsByBoards_(){

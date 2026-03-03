@@ -76,6 +76,11 @@
         </div>
 
         <div class="card" style="margin:0; grid-column: 1 / -1;">
+          <h3>KPIs de Desempenho (período do Funil de Conversão)</h3>
+          <div class="grid" id="kpiCharts" style="grid-template-columns: repeat(4, 1fr); gap:10px;"></div>
+        </div>
+
+        <div class="card" style="margin:0; grid-column: 1 / -1;">
           <h3>Follow-up por Quadros</h3>
           <div class="hint" id="kpiFollow"></div>
           <div class="grid" style="grid-template-columns: repeat(5, 1fr); gap:10px;">
@@ -126,6 +131,8 @@
           tf.appendChild(tr);
         });
 
+        renderKpiCharts(d.kpis || []);
+
         const boards = d.follow || {};
         renderFollowList("fuLeads", boards.leads ? [].concat(boards.leads.overdue||[], boards.leads.today||[], boards.leads.week||[]) : []);
         renderFollowList("fuCaptacoes", boards.captacoes ? [].concat(boards.captacoes.overdue||[], boards.captacoes.today||[], boards.captacoes.week||[]) : []);
@@ -134,6 +141,33 @@
         renderFollowList("fuVendas", boards.vendas ? [].concat(boards.vendas.overdue||[], boards.vendas.today||[], boards.vendas.week||[]) : []);
 
         byId("kpiFollow").innerHTML = "Acompanhamento por quadro (vencidos + hoje + próximos 7 dias).";
+      }
+
+
+      function renderKpiCharts(kpis){
+        const host = byId("kpiCharts");
+        host.innerHTML = "";
+        (kpis || []).forEach(k => {
+          const progress = Math.max(0, Math.min(1, (Number(k.value)||0) / (Number(k.target)||1)));
+          const color = progress >= 1 ? "#22c55e" : (progress >= 0.7 ? "#f59e0b" : "#ef4444");
+          const maxSeries = Math.max(1, ...(k.series || [0]), Number(k.max||1));
+          const bars = (k.series || []).map(v=>{
+            const h = Math.max(6, Math.round((Number(v)||0) / maxSeries * 58));
+            return `<div style="width:10px;height:${h}px;background:${color};border-radius:3px;opacity:.8"></div>`;
+          }).join("");
+
+          const card = document.createElement("div");
+          card.className = "card";
+          card.style.margin = "0";
+          card.innerHTML = `
+            <div style="font-size:12px;color:var(--muted)">${escapeHtml(k.title || "KPI")}</div>
+            <div style="font-size:22px;font-weight:700;margin-top:4px;">${escapeHtml(k.display || "-")}</div>
+            <div class="hint" style="margin-top:4px;">${escapeHtml(k.targetDisplay || "")}</div>
+            <div style="height:8px;border-radius:999px;background:rgba(148,163,184,.2);margin-top:10px;overflow:hidden;"><div style="width:${Math.round(progress*100)}%;height:100%;background:${color};"></div></div>
+            <div style="display:flex;align-items:flex-end;gap:4px;height:62px;margin-top:10px;">${bars || '<div class="hint">sem dados</div>'}</div>
+          `;
+          host.appendChild(card);
+        });
       }
 
       function renderFollowList(elId, arr){

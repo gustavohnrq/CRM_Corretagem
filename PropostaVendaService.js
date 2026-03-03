@@ -2,6 +2,60 @@
  * PropostaVendaService - Fato_Proposta + Fato_Venda
  */
 
+
+function PV_normKey_(s) {
+  if (typeof _normHeader_ === "function") return _normHeader_(s);
+  return String(s || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+function PV_getSheetObjects_(sheetName) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sh = ss.getSheetByName(sheetName);
+  if (!sh) return [];
+
+  const lr = sh.getLastRow();
+  const lc = sh.getLastColumn();
+  if (lr < 2 || lc < 1) return [];
+
+  const headers = sh.getRange(1, 1, 1, lc).getDisplayValues()[0].map(h => String(h || "").trim());
+  const values = sh.getRange(2, 1, lr - 1, lc).getDisplayValues();
+
+  return values.map(row => {
+    const obj = {};
+    headers.forEach((h, i) => {
+      if (h) obj[h] = row[i];
+    });
+    return obj;
+  });
+}
+
+function PV_pickByCandidates_(obj, candidates) {
+  if (!obj) return "";
+  const keyMap = {};
+  Object.keys(obj).forEach(k => { keyMap[PV_normKey_(k)] = k; });
+
+  for (let i = 0; i < candidates.length; i++) {
+    const want = PV_normKey_(candidates[i]);
+    const found = keyMap[want];
+    if (found !== undefined) return String(obj[found] || "").trim();
+  }
+  return "";
+}
+
+function PV_listSheetByIdRobust_(sheetName, idCandidates) {
+  return PV_getSheetObjects_(sheetName)
+    .map(raw => {
+      const id = PV_pickByCandidates_(raw, idCandidates);
+      return { id, raw };
+    })
+    .filter(r => String(r.id || "").trim());
+}
+
 function ensurePropostaVendaSchema_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
 
@@ -81,15 +135,30 @@ function PV_tryGetVisitaContext_(idVisita) {
 
 function PV_listPropostasDetailed_v1() {
   ensureSchema_();
-  const propostas = DataService.listRecords("Fato_Proposta", "Id_Proposta", ["Data", "Valor da Proposta", "status", "Id_Visita"]);
+
+  const propostas = PV_listSheetByIdRobust_("Fato_Proposta", ["Id_Proposta", "ID_ProPOSTA", "id_proposta"]);
+
   return propostas.map(p => {
-    const vis = PV_tryGetVisitaContext_(p.raw["Id_Visita"]);
+    const idVisitaRaw = PV_pickByCandidates_(p.raw, ["Id_Visita", "id_visita"]);
+    const valor = PV_pickByCandidates_(p.raw, ["Valor da Proposta", "valor_proposta"]);
+    const status = PV_pickByCandidates_(p.raw, ["status", "Status"]);
+    const modalidade = PV_pickByCandidates_(p.raw, ["Modalidade de Pagamento", "modalidade_pagamento"]);
+
+    const vis = PV_tryGetVisitaContext_(idVisitaRaw);
     const clientes = vis && vis.clientes_nomes ? vis.clientes_nomes.join(", ") : "-";
     const endereco = vis && vis.imovel ? (vis.imovel["Endereço"] || vis.imovel["Endereco"] || vis.imovel["Quadra/Endereço"] || "-") : "-";
+
     return {
       id: p.id,
-      label: `Proposta ${p.id} • ${p.raw["Valor da Proposta"] || "-"} • ${p.raw["status"] || "-"}`,
-      raw: p.raw,
+      label: `Proposta ${p.id} • ${valor || "-"} • ${status || "-"}`,
+      raw: {
+        ...p.raw,
+        "Id_Proposta": p.id,
+        "Id_Visita": idVisitaRaw,
+        "Valor da Proposta": valor,
+        "status": status,
+        "Modalidade de Pagamento": modalidade
+      },
       enrich: {
         clientes,
         endereco,
@@ -142,11 +211,19 @@ function PV_getPropostaContextById_v1(idProposta) {
 
 function PV_listVendasDetailed_v1() {
   ensureSchema_();
-  const vendas = DataService.listRecords("Fato_Venda", "Id_Venda", ["Id_Proposta", "Data", "Valor da Venda", "Forma de Pagamento", "Comissão", "Data de Recebimento Comissão"]);
+
+  const vendas = PV_listSheetByIdRobust_("Fato_Venda", ["Id_Venda", "id_venda"]);
+
   return vendas.map(v => {
+    const idProposta = PV_pickByCandidates_(v.raw, ["Id_Proposta", "id_proposta"]);
+    const valorVenda = PV_pickByCandidates_(v.raw, ["Valor da Venda", "valor_venda"]);
+    const forma = PV_pickByCandidates_(v.raw, ["Forma de Pagamento", "forma_pagamento"]);
+    const comissao = PV_pickByCandidates_(v.raw, ["Comissão", "Comissao", "comissao"]);
+    const dtRec = PV_pickByCandidates_(v.raw, ["Data de Recebimento Comissão", "Data de Recebimento Comissao", "data_recebimento_comissao"]);
+
     let ctx = null;
     try {
-      ctx = v.raw["Id_Proposta"] ? PV_getPropostaContextById_v1(v.raw["Id_Proposta"]) : null;
+      ctx = idProposta ? PV_getPropostaContextById_v1(idProposta) : null;
     } catch (e) {
       ctx = null;
     }
@@ -157,8 +234,16 @@ function PV_listVendasDetailed_v1() {
 
     return {
       id: v.id,
-      label: `Venda ${v.id} • Proposta ${v.raw["Id_Proposta"] || "-"} • ${v.raw["Valor da Venda"] || "-"}`,
-      raw: v.raw,
+      label: `Venda ${v.id} • Proposta ${idProposta || "-"} • ${valorVenda || "-"}`,
+      raw: {
+        ...v.raw,
+        "Id_Venda": v.id,
+        "Id_Proposta": idProposta,
+        "Valor da Venda": valorVenda,
+        "Forma de Pagamento": forma,
+        "Comissão": comissao,
+        "Data de Recebimento Comissão": dtRec
+      },
       enrich: {
         propostaValor: proposta ? (proposta["Valor da Proposta"] || "-") : "-",
         propostaStatus: proposta ? (proposta["status"] || "-") : "-",
@@ -168,8 +253,8 @@ function PV_listVendasDetailed_v1() {
         idImovel: visita ? (visita.id_imovel || "-") : "-",
         clientes,
         endereco,
-        comissao: v.raw["Comissão"] || "-",
-        dataRecebimentoComissao: v.raw["Data de Recebimento Comissão"] || "-"
+        comissao: comissao || "-",
+        dataRecebimentoComissao: dtRec || "-"
       }
     };
   });

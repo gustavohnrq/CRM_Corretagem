@@ -1564,13 +1564,26 @@ function _PDF_buildClientesPorVisita_() {
 }
 
 function _PDF_getBackgroundDataUrl_() {
-  const linkOrId = "https://drive.google.com/file/d/1hz0s32GBLXxQfZcetfIMrCuQS4gKGHmI/view?usp=sharing";
-  const raw = String(linkOrId || "").trim();
-  if (!raw) return "";
-  const m = raw.match(/(?:\/d\/|id=)([a-zA-Z0-9_-]{10,})/);
-  const id = m ? m[1] : raw;
+  const BG_FOLDER_ID = "1fAzFGRc4KCnY2ou-jPhQ9hoiauQj0-Ce";
   try {
-    const blob = DriveApp.getFileById(id).getBlob();
+    const folder = DriveApp.getFolderById(BG_FOLDER_ID);
+    const it = folder.getFiles();
+    let chosen = null;
+    let chosenTime = 0;
+
+    while (it.hasNext()) {
+      const f = it.next();
+      const name = String(f.getName() || "");
+      if (!/\.(png|jpg|jpeg|webp)$/i.test(name)) continue;
+      const t = (f.getLastUpdated() || f.getDateCreated()).getTime();
+      if (t > chosenTime) {
+        chosen = f;
+        chosenTime = t;
+      }
+    }
+
+    if (!chosen) return "";
+    const blob = chosen.getBlob();
     const ct = blob.getContentType() || "image/png";
     const b64 = Utilities.base64Encode(blob.getBytes());
     return `data:${ct};base64,${b64}`;

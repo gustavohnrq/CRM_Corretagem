@@ -190,6 +190,36 @@ function _pdf_calcNotaMedia_(avaliacoes) {
   return m;
 }
 
+
+function _pdf_getBackgroundDataUrl_() {
+  const BG_FOLDER_ID = "1fAzFGRc4KCnY2ou-jPhQ9hoiauQj0-Ce";
+  try {
+    const folder = DriveApp.getFolderById(BG_FOLDER_ID);
+    const it = folder.getFiles();
+    let chosen = null;
+    let chosenTime = 0;
+
+    while (it.hasNext()) {
+      const f = it.next();
+      const name = String(f.getName() || "");
+      if (!/\.(png|jpg|jpeg|webp)$/i.test(name)) continue;
+      const t = (f.getLastUpdated() || f.getDateCreated()).getTime();
+      if (t > chosenTime) {
+        chosen = f;
+        chosenTime = t;
+      }
+    }
+
+    if (!chosen) return "";
+    const blob = chosen.getBlob();
+    const ct = blob.getContentType() || "image/png";
+    const b64 = Utilities.base64Encode(blob.getBytes());
+    return `data:${ct};base64,${b64}`;
+  } catch (e) {
+    return "";
+  }
+}
+
 function _pdf_buildClientesPorVisita_() {
   const S = PDF_CFG.SHEETS;
   const K = PDF_CFG.KEYS;
@@ -308,19 +338,7 @@ function PDF_getVisitaPayload_v1(idVisita) {
     avsEnriched.map(a => String(a.Cliente_Nome || "").trim()).filter(Boolean)
   ));
 
-  const bg_data_url = (function(){
-    const raw = "https://drive.google.com/file/d/1hz0s32GBLXxQfZcetfIMrCuQS4gKGHmI/view?usp=sharing";
-    const m = String(raw).match(/(?:\/d\/|id=)([a-zA-Z0-9_-]{10,})/);
-    const id = m ? m[1] : String(raw).trim();
-    try {
-      const blob = DriveApp.getFileById(id).getBlob();
-      const ct = blob.getContentType() || "image/png";
-      const b64 = Utilities.base64Encode(blob.getBytes());
-      return `data:${ct};base64,${b64}`;
-    } catch (e) {
-      return "";
-    }
-  })();
+  const bg_data_url = _pdf_getBackgroundDataUrl_();
 
   return {
     id_visita: idv,

@@ -163,10 +163,12 @@
         ? `<span class="badge">Média Geral: ${Number(mediaGeral).toFixed(2)}</span>`
         : '';
 
-      const BG_IMG_URL = String(d.bg_data_url || '').trim() || 'https://drive.google.com/uc?export=view&id=1hz0s32GBLXxQfZcetfIMrCuQS4gKGHmI';
+      const BG_IMG_URL = String(d.bg_data_url || '').trim();
     ?>
 
-    <img class="bgmark" src="<?= BG_IMG_URL ?>" alt="fundo" />
+    <? if (BG_IMG_URL) { ?>
+      <img class="bgmark" src="<?= BG_IMG_URL ?>" alt="fundo" />
+    <? } ?>
 
     <div class="wrapper">
       <div class="content">

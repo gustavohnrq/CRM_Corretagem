@@ -106,10 +106,13 @@
 
       function renderPreview(data){
         const avs = data.avaliacoes || [];
+        const clientes = data.clientes_nomes || [];
+        const clientesTxt = clientes.length ? clientes.join(", ") : "(sem clientes vinculados)";
 
         let html = `<div class="card" style="margin:0;">
           <b>Visita:</b> ${escapeHtml(data.id_visita)}<br/>
           <b>Data:</b> ${escapeHtml(data.data_visita || "")}<br/>
+          <b>Clientes da visita:</b> ${escapeHtml(clientesTxt)}<br/>
           <b>Imóvel:</b> ${escapeHtml(data.id_imovel || "")}<br/>
           <b>Nota média:</b> ${data.nota_media !== null ? Number(data.nota_media).toFixed(2) : "-"}<br/>
         </div>`;

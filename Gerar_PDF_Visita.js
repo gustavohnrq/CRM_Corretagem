@@ -190,9 +190,35 @@ function _pdf_calcNotaMedia_(avaliacoes) {
   return m;
 }
 
+function _pdf_buildClientesPorVisita_() {
+  const S = PDF_CFG.SHEETS;
+  const K = PDF_CFG.KEYS;
+  const out = {};
+
+  const avs = _pdf_getAllObjects_(S.AVAL);
+  const clientes = _pdf_getAllObjects_(S.CLIENTES);
+  const cliMap = {};
+
+  clientes.forEach(c => {
+    const idc = String(c[K.CLI_ID] || "").trim();
+    if (!idc) return;
+    cliMap[idc] = String(c[K.CLI_NOME] || "").trim() || ("Cliente " + idc);
+  });
+
+  avs.forEach(a => {
+    const idv = String(a[K.AVAL_ID_VISITA] || "").trim();
+    const idc = String(a[K.AVAL_ID_CLIENTE] || "").trim();
+    if (!idv || !idc) return;
+    if (!out[idv]) out[idv] = new Set();
+    out[idv].add(cliMap[idc] || ("Cliente " + idc));
+  });
+
+  return out;
+}
+
 /* =========================
    UI: lista p/ dropdown
-   (pedido seu: no detalhe só Id_Imovel e Data_Visita)
+   (Data_Visita + nomes dos clientes vinculados por Fato_Avaliacao)
 ========================= */
 function PDF_listVisitasForSelect_v1() {
   const S = PDF_CFG.SHEETS;
@@ -200,17 +226,19 @@ function PDF_listVisitasForSelect_v1() {
 
   const fatos = _pdf_getAllObjects_(S.FATO);
 
+  const clientesPorVisita = _pdf_buildClientesPorVisita_();
+
   const rows = fatos
     .map(f => {
       const idv = String(f[K.FATO_ID] || "").trim();
       if (!idv) return null;
 
-      const imovel = String(f[K.FATO_IMOVEL] || "").trim();
       const data = String(f[K.FATO_DATA] || "").trim();
+      const nomes = clientesPorVisita[idv] ? Array.from(clientesPorVisita[idv]).join(", ") : "(sem clientes)";
 
       return {
         id: idv,
-        label: `${imovel || "-"} • ${data || "-"}`
+        label: `Data ${data || "-"} • Clientes: ${nomes}`
       };
     })
     .filter(Boolean);
@@ -274,6 +302,9 @@ function PDF_getVisitaPayload_v1(idVisita) {
   });
 
   const nota_media = _pdf_calcNotaMedia_(avsEnriched);
+  const clientes_nomes = Array.from(new Set(
+    avsEnriched.map(a => String(a.Cliente_Nome || "").trim()).filter(Boolean)
+  ));
 
   return {
     id_visita: idv,
@@ -287,7 +318,8 @@ function PDF_getVisitaPayload_v1(idVisita) {
     fato: fato,
     imovel: imovel,
     agenda: agenda,
-    avaliacoes: avsEnriched
+    avaliacoes: avsEnriched,
+    clientes_nomes
   };
 }
 
@@ -306,7 +338,7 @@ function PDF_generatePdfVisita_v1(idVisita) {
   const name = `Visita_${payload.id_visita}.pdf`;
   blob.setName(name);
 
-  const folder = DriveApp.getFolderById(PDF_getOrCreateFolderId_());
+  const folder = DriveApp.getFolderById(PDF_getFolderId_());
 
   // remove anterior com mesmo nome (evita duplicação)
   const existing = folder.getFilesByName(name);

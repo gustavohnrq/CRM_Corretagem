@@ -1495,20 +1495,65 @@ function RV_upsertFatoVisita_v2(obj) {
 // ======================================================
 
 function PDF_getOrCreateFolderId_() {
+  // Mantido por compatibilidade com versões antigas do projeto.
+  // ⚠️ Não usar getRootFolder para evitar exigência de escopo adicional.
+  return PDF_getFolderId_();
+}
+
+function PDF_getFolderId_() {
   const props = PropertiesService.getScriptProperties();
-  let folderId = props.getProperty("PDF_VISITAS_FOLDER_ID");
-  if (folderId) {
-    try { DriveApp.getFolderById(folderId); return folderId; } catch (e) {}
+  const folderId = String(props.getProperty("PDF_VISITAS_FOLDER_ID") || "").trim();
+  if (!folderId) {
+    throw new Error('Defina a propriedade "PDF_VISITAS_FOLDER_ID" com o ID de uma pasta do Drive já existente.');
   }
-
-  const root = DriveApp.getRootFolder();
-  const name = "CRM_Corretagem_PDF_Visitas";
-  const it = root.getFoldersByName(name);
-  const folder = it.hasNext() ? it.next() : root.createFolder(name);
-
-  folderId = folder.getId();
-  props.setProperty("PDF_VISITAS_FOLDER_ID", folderId);
+  try {
+    DriveApp.getFolderById(folderId);
+  } catch (e) {
+    throw new Error('Pasta inválida ou sem acesso. Verifique "PDF_VISITAS_FOLDER_ID".');
+  }
   return folderId;
+}
+
+function _PDF_buildClientesPorVisita_() {
+  const out = {};
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const shA = ss.getSheetByName("Fato_Avaliacao");
+    const shC = ss.getSheetByName("Base_Clientes");
+    if (!shA || !shC) return out;
+
+    const lrA = shA.getLastRow(), lcA = shA.getLastColumn();
+    const lrC = shC.getLastRow(), lcC = shC.getLastColumn();
+    if (lrA < 2 || lcA < 1 || lrC < 2 || lcC < 1) return out;
+
+    const hA = shA.getRange(1, 1, 1, lcA).getValues()[0];
+    const hC = shC.getRange(1, 1, 1, lcC).getValues()[0];
+    const mA = {}, mC = {};
+    hA.forEach((h, i) => { const k = _normHeader_(h); if (k) mA[k] = i; });
+    hC.forEach((h, i) => { const k = _normHeader_(h); if (k) mC[k] = i; });
+
+    const idxAVis = mA[_normHeader_("Id_Visita")];
+    const idxACli = mA[_normHeader_("Id_Cliente")];
+    const idxCID = mC["id"];
+    const idxNome = mC[_normHeader_("Nome Completo")];
+    if ([idxAVis, idxACli, idxCID, idxNome].some(x => x === undefined)) return out;
+
+    const cliMap = {};
+    shC.getRange(2, 1, lrC - 1, lcC).getValues().forEach(r => {
+      const id = String(r[idxCID] ?? "").trim();
+      if (!id) return;
+      cliMap[id] = String(r[idxNome] ?? "").trim() || ("Cliente " + id);
+    });
+
+    shA.getRange(2, 1, lrA - 1, lcA).getValues().forEach(r => {
+      const idv = String(r[idxAVis] ?? "").trim();
+      const idc = String(r[idxACli] ?? "").trim();
+      if (!idv || !idc) return;
+      if (!out[idv]) out[idv] = new Set();
+      out[idv].add(cliMap[idc] || ("Cliente " + idc));
+    });
+  } catch (e) {}
+  return out;
 }
 
 function PDF_listVisitasForSelect_v1() {
@@ -1529,6 +1574,7 @@ function PDF_listVisitasForSelect_v1() {
   const idxIdVis = normToIdx["id_visita"];
   const idxData  = normToIdx[_normHeader_("Data_Visita")];
   const idxImv   = normToIdx[_normHeader_("Id_Imovel")];
+  const clientesPorVisita = _PDF_buildClientesPorVisita_();
 
   if (idxIdVis === undefined) throw new Error('Fato_Visitas: coluna "Id_Visita" não encontrada.');
 
@@ -1544,7 +1590,10 @@ function PDF_listVisitasForSelect_v1() {
     const data = idxData !== undefined ? String(disp[i][idxData] ?? "").trim() : "";
     const imv  = idxImv  !== undefined ? String(values[i][idxImv] ?? "").trim() : "";
 
-    const label = `Visita ${String(idv).trim()} • ${imv || "-"} • ${data || "(sem data)"}`;
+    const nomes = clientesPorVisita[String(idv).trim()]
+      ? Array.from(clientesPorVisita[String(idv).trim()]).join(", ")
+      : "(sem clientes)";
+    const label = `Visita ${String(idv).trim()} • ${data || "(sem data)"} • Clientes: ${nomes}`;
     out.push({ id: String(idv).trim(), label });
   }
 
@@ -1595,6 +1644,12 @@ function PDF_getVisitaPayload_v1(idVisita) {
     .filter(n => !isNaN(n));
   const notaMedia = notasGerais.length ? (notasGerais.reduce((s, n) => s + n, 0) / notasGerais.length) : null;
 
+  const clientesNomes = Array.from(new Set(
+    avaliacoes
+      .map(a => String(a.Cliente_Nome || "").trim())
+      .filter(Boolean)
+  ));
+
   return {
     id_visita: idv,
     fato,
@@ -1605,7 +1660,8 @@ function PDF_getVisitaPayload_v1(idVisita) {
     imovel,
     agenda,
     avaliacoes,
-    nota_media: notaMedia
+    nota_media: notaMedia,
+    clientes_nomes: clientesNomes
   };
 }
 

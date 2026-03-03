@@ -1,0 +1,208 @@
+<script>
+  let APP_URL = null;
+
+  function toast(msg){
+    console.log(msg);
+    alert(msg);
+  }
+
+  function ensureAppUrl(cb){
+    if (APP_URL) return cb(APP_URL);
+    google.script.run.withSuccessHandler(function(url){
+      APP_URL = url;
+      cb(APP_URL);
+    }).getAppUrl();
+  }
+
+  // ✅ FIX: removido quote quebrando URL
+  function nav(page){
+    ensureAppUrl(function(base){
+      const url = base + "?page=" + encodeURIComponent(page);
+      window.top.location.href = url;
+    });
+  }
+
+  function byId(id){ return document.getElementById(id); }
+
+  // ---------- DATE (YYYY-MM-DD) ----------
+  function isDateISO(s){
+    return /^\d{4}-\d{2}-\d{2}$/.test(String(s||"").trim());
+  }
+
+  function normalizeDateISO(s){
+    const v = String(s||"").trim();
+    if (!v) return "";
+    // aceita "YYYY-MM-DD" apenas
+    if (!isDateISO(v)) return null;
+    return v;
+  }
+
+  // ---------- BRL money ----------
+  function formatBRLFromDigits(digits){
+    // digits = somente números (centavos incluídos)
+    let n = digits.replace(/\D/g,'');
+    if (!n) return "";
+    if (n.length === 1) n = "0" + n;
+    if (n.length === 2) n = "0" + n;
+
+    const cents = n.slice(-2);
+    let ints = n.slice(0, -2);
+    ints = ints.replace(/^0+/, '') || "0";
+
+    // separador milhar
+    ints = ints.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+    return "R$ " + ints + "," + cents;
+  }
+
+  function parseBRLToNumber(str){
+    const s = String(str||"").trim();
+    if (!s) return "";
+    // remove R$, espaços, milhares, troca vírgula por ponto
+    const cleaned = s.replace(/[R$\s]/g,'').replace(/\./g,'').replace(',', '.');
+    const n = Number(cleaned);
+    if (isNaN(n)) return null;
+    return n; // number
+  }
+
+  function attachMoneyMask(input){
+    input.dataset.money = "1";
+    input.inputMode = "numeric";
+    input.addEventListener("input", ()=>{
+      const digits = input.value.replace(/\D/g,'');
+      input.value = formatBRLFromDigits(digits);
+    });
+    input.addEventListener("blur", ()=>{
+      if (!input.value) return;
+      const n = parseBRLToNumber(input.value);
+      if (n === null) {
+        toast("Valor inválido. Use somente moeda (ex.: R$ 1.200.000,00)");
+        input.focus();
+      }
+    });
+  }
+
+  function attachDateGuard(input){
+    input.dataset.date = "1";
+    // força formato ISO
+    input.addEventListener("blur", ()=>{
+      if (!input.value) return;
+      const norm = normalizeDateISO(input.value);
+      if (norm === null) {
+        toast("Data inválida. Use o formato YYYY-MM-DD.");
+        input.focus();
+      }
+    });
+  }
+
+  function autoDetectMasks(root=document){
+    // datas: ids/names contendo "Data" ou terminando em "_Visita" etc.
+    const inputs = [...root.querySelectorAll("input")];
+    inputs.forEach(inp=>{
+      const key = (inp.name || inp.id || "").toLowerCase();
+
+      // money
+      if (/(preco|preço|valor|orcamento|orçamento|condominio|condomínio|vgv|vgc)/i.test(key)) {
+        if (!inp.dataset.money) attachMoneyMask(inp);
+      }
+
+      // date
+      if (/(data)/i.test(key)) {
+        // se possível, use input date (melhor bloqueio)
+        try { inp.type = "date"; } catch(e){}
+        if (!inp.dataset.date) attachDateGuard(inp);
+      }
+
+      // time
+      if (/(hora)/i.test(key)) {
+        try { inp.type = "time"; } catch(e){}
+      }
+    });
+  }
+
+  // ---------- forms ----------
+  function formToObject(formId){
+    const form = byId(formId);
+    const data = {};
+
+    [...form.querySelectorAll("input, select, textarea")].forEach(el=>{
+      const k = el.name || el.id;
+      if (!k) return;
+
+      let v = el.value;
+
+      // normaliza date
+      if (el.dataset.date === "1") {
+        if (v) {
+          const norm = normalizeDateISO(v);
+          if (norm === null) throw new Error(`Data inválida no campo "${k}". Use YYYY-MM-DD.`);
+          v = norm;
+        }
+      }
+
+      // normaliza money
+      if (el.dataset.money === "1") {
+        if (v) {
+          const n = parseBRLToNumber(v);
+          if (n === null) throw new Error(`Moeda inválida no campo "${k}".`);
+          v = n; // number
+        }
+      }
+
+      data[k] = v;
+    });
+
+    return data;
+  }
+
+  function setFormFromObject(formId, obj){
+    const form = byId(formId);
+    [...form.querySelectorAll("input, select, textarea")].forEach(el=>{
+      const k = el.name || el.id;
+      if (!k) return;
+      let v = (obj && obj.hasOwnProperty(k)) ? (obj[k] ?? "") : "";
+
+      // se for money e vier número, formata BRL
+      if (el.dataset.money === "1" && v !== "" && v !== null && v !== undefined) {
+        const centsDigits = String(Math.round(Number(v) * 100));
+        el.value = formatBRLFromDigits(centsDigits);
+        return;
+      }
+
+      el.value = v;
+    });
+  }
+
+  function clearForm(formId){
+    setFormFromObject(formId, {});
+  }
+
+  function renderList(listId, items, onClick){
+    const el = byId(listId);
+    el.innerHTML = "";
+    if (!items || items.length === 0){
+      el.innerHTML = `<div class="hint">Sem registros ainda.</div>`;
+      return;
+    }
+    items.forEach(it=>{
+      const div = document.createElement("div");
+      div.className = "item";
+      div.innerHTML = `<b>${escapeHtml(it.label || it.id)}</b><small>ID: ${escapeHtml(it.id)}</small>`;
+      div.addEventListener("click", ()=>onClick(it));
+      el.appendChild(div);
+    });
+  }
+
+  function escapeHtml(s){
+    return String(s ?? "")
+      .replaceAll("&","&amp;")
+      .replaceAll("<","&lt;")
+      .replaceAll(">","&gt;")
+      .replaceAll('"',"&quot;")
+      .replaceAll("'","&#039;");
+  }
+
+  // helper para usar em telas específicas
+  function initMasks(){
+    autoDetectMasks(document);
+  }
+</script>

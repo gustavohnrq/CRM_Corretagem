@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <?!= include('Estilos'); ?>
+    <?!= include('JsBase'); ?>
+  </head>
+  <body>
+    <div class="topbar">
+      <div>
+        <div class="title">CRM Corretagem</div>
+        <div class="sub">Web App • Asa Norte • Captação + Venda</div>
+      </div>
+      <span class="pill">Menu</span>
+    </div>
+
+    <div class="card">
+      <h3>Escolha um módulo</h3>
+
+      <div class="menuGrid">
+        <button type="button" onclick="nav('Form_BaseClientes')">📒 Base de Clientes</button>
+        <button type="button" onclick="nav('Form_Estoque')">🏠 Estoque de Imóveis</button>
+        <button type="button" onclick="nav('Form_LeadsCompradores')">📥 Leads Compradores</button>
+        <button type="button" onclick="nav('Form_LeadsVendedores')">📤 Leads Vendedores</button>
+        <button type="button" onclick="nav('Form_AgendarVisita')">🗓️ Agenda de Visitas</button>
+        <button type="button" onclick="nav('Form_RegistrarVisita')">🧾 Registrar Visita</button>
+        <button class="ok" onclick="nav('Form_PDFVisitas')">🧾 PDF Visitas</button>
+        <button type="button" class="secondary" onclick="refreshDashboard()">🔄 Atualizar Painel</button>
+      </div>
+
+      <!-- LINHA SOLICITADA -->
+      <hr style="border:none;border-top:1px solid var(--line); margin:14px 0;" />
+
+      <!-- DASHBOARD -->
+      <div class="grid" style="grid-template-columns: 1fr 1fr; gap:12px;">
+        <div class="card" style="margin:0;">
+          <h3>Controle Semanal (últimas 4 semanas)</h3>
+          <div class="hint" id="kpiSemanal"></div>
+          <div style="margin-top:10px; overflow:auto;">
+            <table style="width:100%; border-collapse:collapse; font-size:12px;">
+              <thead>
+                <tr>
+                  <th style="text-align:left; padding:8px; border-bottom:1px solid var(--line);">Semana</th>
+                  <th style="text-align:right; padding:8px; border-bottom:1px solid var(--line);">Ligações</th>
+                  <th style="text-align:right; padding:8px; border-bottom:1px solid var(--line);">Conversas</th>
+                  <th style="text-align:right; padding:8px; border-bottom:1px solid var(--line);">Visitas</th>
+                  <th style="text-align:right; padding:8px; border-bottom:1px solid var(--line);">Propostas</th>
+                  <th style="text-align:right; padding:8px; border-bottom:1px solid var(--line);">Vendas</th>
+                </tr>
+              </thead>
+              <tbody id="tblSemanal"></tbody>
+            </table>
+          </div>
+          <div class="btns" style="margin-top:10px;">
+            <button class="secondary" onclick="rebuild('weekly')">♻️ Recalcular Semanal</button>
+          </div>
+        </div>
+
+        <div class="card" style="margin:0;">
+          <h3>Funil Mensal (mês atual)</h3>
+          <div class="hint" id="kpiMensal"></div>
+          <div style="margin-top:10px; overflow:auto;">
+            <table style="width:100%; border-collapse:collapse; font-size:12px;">
+              <thead>
+                <tr>
+                  <th style="text-align:left; padding:8px; border-bottom:1px solid var(--line);">Etapa</th>
+                  <th style="text-align:right; padding:8px; border-bottom:1px solid var(--line);">Qtd</th>
+                  <th style="text-align:right; padding:8px; border-bottom:1px solid var(--line);">Conv.</th>
+                </tr>
+              </thead>
+              <tbody id="tblFunil"></tbody>
+            </table>
+          </div>
+          <div class="btns" style="margin-top:10px;">
+            <button class="secondary" onclick="rebuild('monthly')">♻️ Recalcular Mensal</button>
+          </div>
+        </div>
+
+        <div class="card" style="margin:0; grid-column: 1 / -1;">
+          <h3>Follow-up</h3>
+          <div class="hint" id="kpiFollow"></div>
+
+          <div class="row" style="margin-top:10px;">
+            <div class="card" style="margin:0;">
+              <h3 style="margin-bottom:8px;">Vencidos</h3>
+              <div class="list" id="fuOverdue" style="max-height:240px;"></div>
+            </div>
+            <div class="card" style="margin:0;">
+              <h3 style="margin-bottom:8px;">Hoje</h3>
+              <div class="list" id="fuToday" style="max-height:240px;"></div>
+            </div>
+          </div>
+
+          <div class="card" style="margin:10px 0 0 0;">
+            <h3 style="margin-bottom:8px;">Próximos 7 dias</h3>
+            <div class="list" id="fuWeek" style="max-height:240px;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      function nfmt(x){ return (x===null || x===undefined || x==="") ? "-" : x; }
+      function pct(x){
+        if (x===null || x===undefined || x==="") return "-";
+        const v = Number(x);
+        if (isNaN(v)) return "-";
+        return Math.round(v*1000)/10 + "%";
+      }
+
+      function refreshDashboard(){
+        google.script.run
+          .withSuccessHandler(renderDashboard)
+          .withFailureHandler(err => toast("Erro no painel: " + (err.message || err)))
+          .getDashboardData();
+      }
+
+      function rebuild(kind){
+        const fn = (kind === "weekly") ? "rebuildControleSemanal" : "rebuildFunilMensal";
+        google.script.run
+          .withSuccessHandler(() => refreshDashboard())
+          .withFailureHandler(err => toast("Erro ao recalcular: " + (err.message || err)))[fn]();
+      }
+
+      function renderDashboard(d){
+        // KPIs
+        byId("kpiSemanal").innerHTML = `Total 4 semanas: <b>${nfmt(d.weeklyTotals.ligacoes)}</b> ligações • <b>${nfmt(d.weeklyTotals.visitas)}</b> visitas • <b>${nfmt(d.weeklyTotals.vendas)}</b> vendas`;
+        byId("kpiMensal").innerHTML = `Mês ${escapeHtml(d.monthKey)}: <b>${nfmt(d.monthly.funil.vendas)}</b> vendas • conv. Proposta→Venda: <b>${pct(d.monthly.rates.proposta_para_venda)}</b>`;
+        byId("kpiFollow").innerHTML = `Vencidos: <b>${d.follow.overdue.length}</b> • Hoje: <b>${d.follow.today.length}</b> • Próx. 7 dias: <b>${d.follow.week.length}</b>`;
+
+        // Tabela semanal
+        const tb = byId("tblSemanal");
+        tb.innerHTML = "";
+        d.weeklyRows.forEach(r=>{
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td style="padding:8px; border-bottom:1px solid rgba(34,49,85,.35)">${escapeHtml(r.semana)}</td>
+            <td style="padding:8px; text-align:right; border-bottom:1px solid rgba(34,49,85,.35)">${nfmt(r.ligacoes)}</td>
+            <td style="padding:8px; text-align:right; border-bottom:1px solid rgba(34,49,85,.35)">${nfmt(r.conversas)}</td>
+            <td style="padding:8px; text-align:right; border-bottom:1px solid rgba(34,49,85,.35)">${nfmt(r.visitas)}</td>
+            <td style="padding:8px; text-align:right; border-bottom:1px solid rgba(34,49,85,.35)">${nfmt(r.propostas)}</td>
+            <td style="padding:8px; text-align:right; border-bottom:1px solid rgba(34,49,85,.35)">${nfmt(r.vendas)}</td>
+          `;
+          tb.appendChild(tr);
+        });
+
+        // Tabela funil mensal
+        const tf = byId("tblFunil");
+        tf.innerHTML = "";
+        const f = d.monthly.funil;
+        const rates = d.monthly.rates;
+
+        const rows = [
+          ["Leads", f.leads, null],
+          ["Contatos", f.contatos, rates.lead_para_contato],
+          ["Visitas", f.visitas, rates.contato_para_visita],
+          ["Propostas", f.propostas, rates.visita_para_proposta],
+          ["Vendas", f.vendas, rates.proposta_para_venda]
+        ];
+
+        rows.forEach(([name, qty, rate])=>{
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td style="padding:8px; border-bottom:1px solid rgba(34,49,85,.35)">${escapeHtml(name)}</td>
+            <td style="padding:8px; text-align:right; border-bottom:1px solid rgba(34,49,85,.35)">${nfmt(qty)}</td>
+            <td style="padding:8px; text-align:right; border-bottom:1px solid rgba(34,49,85,.35)">${rate===null ? "-" : pct(rate)}</td>
+          `;
+          tf.appendChild(tr);
+        });
+
+        // Follow lists
+        renderFollowList("fuOverdue", d.follow.overdue);
+        renderFollowList("fuToday", d.follow.today);
+        renderFollowList("fuWeek", d.follow.week);
+      }
+
+      function renderFollowList(elId, arr){
+        const el = byId(elId);
+        el.innerHTML = "";
+        if (!arr || arr.length === 0){
+          el.innerHTML = `<div class="hint">Sem itens.</div>`;
+          return;
+        }
+        arr.forEach(x=>{
+          const div = document.createElement("div");
+          div.className = "item";
+          div.innerHTML = `<b>${escapeHtml(x.nome || "Sem nome")}</b>
+            <small>${escapeHtml(x.tipo || "")} • ${escapeHtml(x.proximo || "")} • ${escapeHtml(x.telefone || "")}</small>`;
+          el.appendChild(div);
+        });
+      }
+
+      refreshDashboard();
+    </script>
+  </body>
+</html>

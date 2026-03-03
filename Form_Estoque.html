@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <?!= include('Estilos'); ?>
+    <?!= include('JsBase'); ?>
+    <style>
+      /* ✅ layout 70% / 30% */
+      .grid70{
+        display:grid;
+        grid-template-columns: 7fr 3fr;
+        gap: 14px;
+        align-items: start;
+      }
+      @media (max-width: 980px){
+        .grid70{ grid-template-columns: 1fr; }
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="topbar">
+      <div>
+        <div class="title">Estoque de Imóveis</div>
+        <div class="sub">Explorar (filtros) + editar</div>
+      </div>
+      <div class="btns">
+        <button class="secondary" onclick="nav('Form_Menu')">← Menu</button>
+      </div>
+    </div>
+
+    <div class="grid70">
+      <!-- 70%: Registros + filtros -->
+      <div class="card">
+        <h3>Registros</h3>
+
+        <!-- filtros (somáveis) -->
+        <div class="row" style="margin-top:8px;">
+          <div>
+            <label>Filtro: Bairro</label>
+            <input id="fBairro" list="dlBairroFilter" placeholder="(todos)" />
+            <datalist id="dlBairroFilter"></datalist>
+          </div>
+          <div>
+            <label>Filtro: Quartos</label>
+            <input id="fQuartos" list="dlQuartosFilter" placeholder="(todos)" inputmode="numeric" />
+            <datalist id="dlQuartosFilter"></datalist>
+          </div>
+        </div>
+
+        <div class="row">
+          <div>
+            <label>Filtro: Valor mín. (R$)</label>
+            <input id="fVmin" placeholder="Ex: 900.000" />
+          </div>
+          <div>
+            <label>Filtro: Valor máx. (R$)</label>
+            <input id="fVmax" placeholder="Ex: 1.200.000" />
+          </div>
+        </div>
+
+        <div class="btns" style="margin-top:10px;">
+          <button class="secondary" type="button" onclick="applyFilters()">Aplicar filtros</button>
+          <button class="secondary" type="button" onclick="clearFilters()">Limpar filtros</button>
+          <button class="ok" type="button" onclick="newRecord()">+ Novo</button>
+          <button class="secondary" type="button" onclick="reloadAll()">Atualizar</button>
+        </div>
+
+        <div class="hint" style="margin-top:10px;">
+          Clique em um item para carregar no formulário de edição.
+        </div>
+
+        <div class="list" id="list" style="margin-top:10px;"></div>
+      </div>
+
+      <!-- 30%: Formulário CRUD -->
+      <div class="card">
+        <h3>Cadastro / Edição</h3>
+
+        <datalist id="dlCaptadores"></datalist>
+        <datalist id="dlTipo"></datalist>
+        <datalist id="dlBairro"></datalist>
+        <datalist id="dlPub"></datalist>
+        <datalist id="dlExclusivo"></datalist>
+
+        <form id="form">
+          <div class="row">
+            <div>
+              <label>Codigo</label>
+              <input name="Codigo" placeholder="(ex.: 308N-AP12)" />
+            </div>
+            <div>
+              <label>Captadores</label>
+              <input name="Captadores" list="dlCaptadores" placeholder="Seu nome / parceiro..." />
+            </div>
+          </div>
+
+          <div class="row">
+            <div>
+              <label>Tipo</label>
+              <input name="Tipo" list="dlTipo" placeholder="Apartamento / Cobertura..." />
+            </div>
+            <div>
+              <label>Quartos</label>
+              <input name="Quartos" placeholder="2" inputmode="numeric" />
+            </div>
+          </div>
+
+          <div class="row">
+            <div>
+              <label>Valor</label>
+              <input name="Valor" id="Valor" placeholder="R$ 1.200.000,00" />
+            </div>
+            <div>
+              <label>Bairro</label>
+              <input name="Bairro" list="dlBairro" placeholder="Asa Norte / Noroeste..." />
+            </div>
+          </div>
+
+          <label>Endereco</label>
+          <input name="Endereco" placeholder="Endereço completo / referência" />
+
+          <div class="row">
+            <div>
+              <label>PublicacaoNaInternet</label>
+              <input name="PublicacaoNaInternet" list="dlPub" placeholder="Sim/Não" />
+            </div>
+            <div>
+              <label>Exclusivo</label>
+              <input name="Exclusivo" list="dlExclusivo" placeholder="Sim/Não" />
+            </div>
+          </div>
+        </form>
+
+        <div class="btns">
+          <button class="ok" onclick="save()">Salvar</button>
+          <button class="secondary" onclick="clearForm('form'); currentId=null;">Limpar</button>
+          <button class="danger" onclick="remove()">Excluir</button>
+        </div>
+
+        <div class="hint" style="margin-top:10px">
+          Dica: use os filtros para achar rápido e editar.
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const SHEET = "Estoque_Imoveis";
+      const IDCOL = "Codigo";
+      let currentId = null;
+
+      // presets para datalists do CRUD
+      const PRESETS = {
+        Tipo: ["Apartamento","Cobertura","Kitnet","Casa","Sala Comercial","Loft"],
+        PublicacaoNaInternet: ["Sim","Não"],
+        Exclusivo: ["Sim","Não"]
+      };
+
+      function fillDatalist(dlId, values){
+        const dl = document.getElementById(dlId);
+        if (!dl) return;
+        dl.innerHTML = "";
+        (values||[]).forEach(v=>{
+          const opt = document.createElement("option");
+          opt.value = v;
+          dl.appendChild(opt);
+        });
+      }
+
+      function mergeUnique(a,b){
+        const set = new Set();
+        (a||[]).forEach(x=>{ x=String(x||"").trim(); if(x) set.add(x); });
+        (b||[]).forEach(x=>{ x=String(x||"").trim(); if(x) set.add(x); });
+        return Array.from(set).sort((x,y)=>x.localeCompare(y, "pt-BR"));
+      }
+
+      function loadCrudDatalists(){
+        fillDatalist("dlTipo", PRESETS.Tipo);
+        fillDatalist("dlPub", PRESETS.PublicacaoNaInternet);
+        fillDatalist("dlExclusivo", PRESETS.Exclusivo);
+
+        // Mescla com valores distintos da planilha (Captadores/Bairro)
+        google.script.run
+          .withSuccessHandler(function(map){
+            fillDatalist("dlCaptadores", mergeUnique([], (map && map["Captadores"]) ? map["Captadores"] : []));
+            fillDatalist("dlBairro", mergeUnique([], (map && map["Bairro"]) ? map["Bairro"] : []));
+          })
+          .withFailureHandler(function(err){
+            console.log("Distinct error:", err);
+          })
+          .getDistinctValues(SHEET, ["Captadores","Bairro"]);
+      }
+
+      // filtros
+      function loadFilterOptions(){
+        google.script.run
+          .withSuccessHandler(function(res){
+            fillDatalist("dlBairroFilter", (res && res.Bairro) || []);
+            fillDatalist("dlQuartosFilter", (res && res.Quartos) || []);
+          })
+          .withFailureHandler(function(err){
+            console.log("Filtro options error:", err);
+          })
+          .EST_getDistinctFilters_v1();
+      }
+
+      function getFilters(){
+        const bairro = String(byId("fBairro").value || "").trim();
+        const quartos = String(byId("fQuartos").value || "").trim();
+        const vminTxt = String(byId("fVmin").value || "").trim();
+        const vmaxTxt = String(byId("fVmax").value || "").trim();
+
+        const vmin = vminTxt ? parseBRLToNumber(vminTxt) : null;
+        const vmax = vmaxTxt ? parseBRLToNumber(vmaxTxt) : null;
+
+        if (vminTxt && vmin === null) throw new Error("Valor mín. inválido.");
+        if (vmaxTxt && vmax === null) throw new Error("Valor máx. inválido.");
+
+        return { bairro, quartos, vmin, vmax };
+      }
+
+      function applyFilters(){
+        let filters;
+        try { filters = getFilters(); }
+        catch(e){ return toast(e.message || e); }
+
+        google.script.run
+          .withSuccessHandler(function(items){
+            renderList("list", items, function(it){
+              currentId = it.id;
+              google.script.run.withSuccessHandler(function(obj){
+                if (!obj) return toast("Registro não encontrado.");
+                setFormFromObject("form", obj);
+              }).getById(SHEET, IDCOL, it.id);
+            });
+          })
+          .withFailureHandler(function(err){
+            toast("Erro ao listar: " + (err.message || err));
+          })
+          .EST_listForPanelFiltered_v1(filters);
+      }
+
+      function clearFilters(){
+        byId("fBairro").value = "";
+        byId("fQuartos").value = "";
+        byId("fVmin").value = "";
+        byId("fVmax").value = "";
+        applyFilters();
+      }
+
+      function reloadAll(){
+        loadFilterOptions();
+        loadCrudDatalists();
+        applyFilters();
+      }
+
+      // CRUD
+      function newRecord(){ currentId=null; clearForm("form"); }
+
+      function save(){
+        const obj = formToObject("form");
+        const id = (obj[IDCOL] || currentId || "").toString().trim();
+        if (!id) return toast("Preencha o Codigo (ID).");
+
+        if (obj["Valor"]) {
+          const n = parseBRLToNumber(String(obj["Valor"]));
+          if (n === null) return toast("Valor inválido.");
+          obj["Valor"] = n;
+        }
+
+        google.script.run
+          .withSuccessHandler(function(res){
+            toast("Salvo: " + res.action + " (" + res.id + ")");
+            currentId = res.id;
+            reloadAll();
+          })
+          .withFailureHandler(function(err){
+            toast("Erro ao salvar: " + (err.message || err));
+          })
+          .upsertById(SHEET, IDCOL, obj);
+      }
+
+      function remove(){
+        const obj = formToObject("form");
+        const id = (obj[IDCOL] || currentId || "").toString().trim();
+        if (!id) return toast("Informe o Codigo para excluir.");
+        if (!confirm("Excluir Codigo " + id + "?")) return;
+
+        google.script.run
+          .withSuccessHandler(function(res){
+            toast(res.ok ? "Excluído." : ("Não excluído: " + res.message));
+            newRecord();
+            reloadAll();
+          })
+          .withFailureHandler(function(err){
+            toast("Erro ao excluir: " + (err.message || err));
+          })
+          .deleteById(SHEET, IDCOL, id);
+      }
+
+      // init
+      initMasks();
+      attachMoneyMask(byId("Valor"));
+      attachMoneyMask(byId("fVmin"));
+      attachMoneyMask(byId("fVmax"));
+
+      reloadAll();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      body { font-family: Arial, sans-serif; font-size: 11px; color: #111; }
+      h1 { font-size: 16px; margin: 0 0 6px 0; }
+      h2 { font-size: 12px; margin: 14px 0 6px 0; }
+      .box { border: 1px solid #ddd; border-radius: 8px; padding: 10px; margin-top: 8px; }
+      .row { display: flex; gap: 10px; }
+      .col { flex: 1; }
+      table { width: 100%; border-collapse: collapse; margin-top: 6px; }
+      th, td { border: 1px solid #ddd; padding: 6px; vertical-align: top; }
+      th { background: #f5f5f5; }
+      .muted { color: #666; }
+      .small { font-size: 10px; }
+      .right { text-align: right; }
+    </style>
+  </head>
+  <body>
+    <? const d = data; ?>
+    <? const fato = d.fato || {}; ?>
+    <? const imv = d.imovel || null; ?>
+    <? const ag = d.agenda || null; ?>
+    <? const avs = d.avaliacoes || []; ?>
+
+    <h1>Relatório de Visita — #<?= d.id_visita ?></h1>
+    <div class="muted small">Gerado em: <?= (new Date()).toLocaleString('pt-BR') ?></div>
+
+    <div class="box">
+      <div class="row">
+        <div class="col">
+          <b>Data da visita:</b> <?= d.data_visita || "" ?><br/>
+          <b>Imóvel (código):</b> <?= d.id_imovel || "" ?><br/>
+          <b>Agenda vinculada:</b> <?= d.id_agendamento || "-" ?><br/>
+        </div>
+        <div class="col">
+          <b>Nota média:</b> <?= (d.nota_media !== null) ? d.nota_media.toFixed(2) : "-" ?><br/>
+          <b>Anexo (ficha):</b>
+          <? if (d.anexo_ficha_visita) { ?>
+            <?= d.anexo_ficha_visita ?>
+          <? } else { ?>
+            -
+          <? } ?>
+        </div>
+      </div>
+    </div>
+
+    <h2>Dados registrados (Fato_Visitas)</h2>
+    <div class="box small">
+      <? for (var k in fato) { ?>
+        <div><b><?= k ?>:</b> <?= String(fato[k] ?? "") ?></div>
+      <? } ?>
+    </div>
+
+    <? if (imv) { ?>
+      <h2>Imóvel (Estoque_Imoveis)</h2>
+      <div class="box small">
+        <? for (var k2 in imv) { ?>
+          <div><b><?= k2 ?>:</b> <?= String(imv[k2] ?? "") ?></div>
+        <? } ?>
+      </div>
+    <? } ?>
+
+    <? if (ag) { ?>
+      <h2>Agenda vinculada (Agenda_Visitas)</h2>
+      <div class="box small">
+        <? for (var k3 in ag) { ?>
+          <div><b><?= k3 ?>:</b> <?= String(ag[k3] ?? "") ?></div>
+        <? } ?>
+      </div>
+    <? } ?>
+
+    <h2>Avaliações (Fato_Avaliacao)</h2>
+    <? if (!avs.length) { ?>
+      <div class="box muted">Nenhuma avaliação registrada para esta visita.</div>
+    <? } else { ?>
+      <table>
+        <thead>
+          <tr>
+            <th>Cliente</th>
+            <th class="right">Nota geral</th>
+            <th class="right">Preço N10</th>
+            <th>Detalhes</th>
+          </tr>
+        </thead>
+        <tbody>
+          <? avs.forEach(function(a){ ?>
+            <tr>
+              <td><?= a.Cliente_Nome || ("Cliente " + (a.Id_Cliente || "")) ?></td>
+              <td class="right"><?= (a.Nota_Geral ?? "") ?></td>
+              <td class="right"><?= (a.Preco_N10 ?? "") ?></td>
+              <td class="small">
+                <? for (var k4 in a) { ?>
+                  <? if (["Cliente_Nome","Nota_Geral","Preco_N10"].indexOf(k4) !== -1) continue; ?>
+                  <div><b><?= k4 ?>:</b> <?= String(a[k4] ?? "") ?></div>
+                <? } ?>
+              </td>
+            </tr>
+          <? }); ?>
+        </tbody>
+      </table>
+    <? } ?>
+  </body>
+</html>

@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <?!= include('Estilos'); ?>
+    <?!= include('JsBase'); ?>
+  </head>
+  <body>
+    <div class="topbar">
+      <div>
+        <div class="title">Registrar Visita</div>
+        <div class="sub">Fato_Visitas + Fato_Avaliacao (aninhado)</div>
+      </div>
+      <div class="btns">
+        <button class="secondary" onclick="nav('Form_Menu')">← Menu</button>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h3>Visitas Registradas (Fato_Visitas)</h3>
+        <div class="btns">
+          <button class="secondary" type="button" onclick="loadFatos()">Atualizar</button>
+          <button class="ok" type="button" onclick="newFato()">+ Novo</button>
+        </div>
+        <div class="list" id="listFatos" style="margin-top:10px;"></div>
+      </div>
+
+      <div class="card">
+        <h3>Fato_Visitas (pai)</h3>
+
+        <div class="card" style="margin:0 0 12px 0;">
+          <h3>Vínculo com Agenda_Visitas</h3>
+
+          <label>Selecionar visita agendada (Agenda_Visitas.id)</label>
+          <select id="agendaSelect"></select>
+
+          <div class="btns">
+            <button class="secondary" type="button" onclick="useSelectedAgenda()">Usar esta visita</button>
+            <!-- ✅ removido o botão "Criar Visita" -->
+          </div>
+
+          <div class="hint" style="margin-top:8px">
+            A Agenda apenas preenche <b>Id_Agendamento</b>. O <b>Id_Visita</b> é auto-incremental.
+          </div>
+        </div>
+
+        <form id="fatoForm">
+          <div class="row">
+            <div>
+              <label>Id_Visita (auto)</label>
+              <input name="Id_Visita" id="Id_Visita" readonly />
+            </div>
+            <div>
+              <label>Id_Agendamento (ref Agenda_Visitas.id)</label>
+              <input name="Id_Agendamento" id="Id_Agendamento" readonly placeholder="(opcional)" />
+            </div>
+          </div>
+
+          <div class="row">
+            <div>
+              <label>Id_Imovel (ref Estoque_Imoveis.Código)</label>
+              <select name="Id_Imovel" id="Id_Imovel"></select>
+            </div>
+            <div>
+              <label>Data_Visita (DD/MM/AAAA)</label>
+              <!-- ✅ máscara estável: maxlength 10 -->
+              <input name="Data_Visita" id="Data_Visita" inputmode="numeric" maxlength="10" placeholder="DD/MM/AAAA" />
+            </div>
+          </div>
+
+          <div class="row">
+            <div>
+              <label>Visita_Com_Parceiro</label>
+              <select name="Visita_Com_Parceiro">
+                <option value="">Selecione...</option>
+                <option>Sim</option>
+                <option>Não</option>
+              </select>
+            </div>
+            <div>
+              <label>(Livre)</label>
+              <input name="(Livre)" placeholder="campo extra opcional" />
+            </div>
+          </div>
+
+          <!-- ANINHADO -->
+          <div class="card" style="margin:12px 0;">
+            <h3>Avaliações (Fato_Avaliacao)</h3>
+            <div class="hint">Você pode adicionar várias avaliações na mesma visita.</div>
+
+            <div class="btns" style="margin-top:10px;">
+              <button class="ok" type="button" onclick="openAvaliacao()">+ Adicionar/Editar Avaliação</button>
+              <button class="secondary" type="button" onclick="loadAvaliacoes()">Atualizar lista</button>
+            </div>
+
+            <div class="list" id="listAval" style="margin-top:10px; max-height:260px;"></div>
+
+            <div id="avaliacaoBox" style="display:none; margin-top:12px;">
+              <div class="card" style="margin:0;">
+                <h3>Form Avaliação</h3>
+
+                <input type="hidden" id="id_Avaliacao" />
+
+                <label>Cliente (obrigatório)</label>
+                <select id="avCliente"></select>
+
+                <div class="scoreWrap" id="scoreArea"></div>
+
+                <label>Preco_N10 (sugestão de preço do cliente)</label>
+                <input id="Preco_N10" name="Preco_N10" />
+
+                <div class="btns" style="margin-top:12px;">
+                  <button class="ok" type="button" onclick="saveAvaliacao()">Salvar avaliação</button>
+                  <button class="secondary" type="button" onclick="closeAvaliacao()">Fechar</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ✅ Foto / upload -->
+          <div class="card" style="margin:12px 0;">
+            <h3>Anexo Ficha de Visita (foto)</h3>
+            <div class="hint">Tire uma foto. O arquivo será salvo no Drive com o nome do Id_Visita.</div>
+
+            <input type="file" id="FichaFile" accept="image/*" capture="environment" />
+
+            <div class="btns" style="margin-top:10px;">
+              <button class="ok" type="button" onclick="uploadFicha()">Enviar foto</button>
+              <button class="secondary" type="button" onclick="clearFicha()">Remover seleção</button>
+            </div>
+
+            <div id="fichaInfo" class="hint" style="margin-top:8px;"></div>
+
+            <!-- guarda o link/arquivo para salvar no campo -->
+            <input type="hidden" name="Anexo_Ficha_Visita" id="Anexo_Ficha_Visita" />
+          </div>
+
+          <label>Tipo_Captacao</label>
+          <input name="Tipo_Captacao" />
+
+          <label>Endereco_Externo</label>
+          <input name="Endereco_Externo" />
+
+          <label>Proposta</label>
+          <input name="Proposta" />
+        </form>
+
+        <div class="btns">
+          <button class="ok" type="button" onclick="saveFato()">Salvar Visita</button>
+          <button class="secondary" type="button" onclick="clearAll()">Limpar</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      let currentIdVisita = null;
+      let clientesMap = {};
+
+      const SCORE_FIELDS = [
+        ["Localizacao", "Localização"],
+        ["Tamanho", "Tamanho"],
+        ["Planta_Imovel", "Planta do imóvel"],
+        ["Qualidade_Acabamento", "Qualidade do acabamento"],
+        ["Estado_Conservacao", "Estado de conservação"],
+        ["Condominio_AreaComun", "Condomínio / Área comum"],
+        ["Preco", "Preço (sensação)"],
+        ["Nota_Geral", "Nota geral"]
+      ];
+
+      // ===== máscara DD/MM/AAAA estável (não conflita com initMasks) =====
+      function onlyDigits(s){ return String(s||"").replace(/\D/g,""); }
+      function applyMaskDDMMYYYY(input){
+        if (!input) return;
+        input.addEventListener("input", () => {
+          const digits = onlyDigits(input.value).slice(0, 8);
+          let out = digits.slice(0,2);
+          if (digits.length > 2) out += "/" + digits.slice(2,4);
+          if (digits.length > 4) out += "/" + digits.slice(4,8);
+          input.value = out;
+        });
+      }
+      function isValidDDMMYYYY(s){
+        if (!/^\d{2}\/\d{2}\/\d{4}$/.test(s)) return false;
+        const [dd,mm,yyyy] = s.split("/").map(Number);
+        if (yyyy < 1900 || yyyy > 2100) return false;
+        if (mm < 1 || mm > 12) return false;
+        const dt = new Date(yyyy, mm-1, dd);
+        return dt.getFullYear()===yyyy && (dt.getMonth()+1)===mm && dt.getDate()===dd;
+      }
+
+      function clearAll(){
+        currentIdVisita = null;
+        clearForm("fatoForm");
+        byId("Id_Visita").value = "";
+        byId("Id_Agendamento").value = "";
+        byId("Anexo_Ficha_Visita").value = "";
+        byId("fichaInfo").innerHTML = "";
+        closeAvaliacao();
+        byId("listAval").innerHTML = `<div class="hint">Clique em + Novo para reservar Id_Visita e ver avaliações.</div>`;
+      }
+
+      // ===== reserva id_visita (DRAFT) =====
+      function newFato(){
+        clearAll();
+        google.script.run
+          .withSuccessHandler(function(res){
+            currentIdVisita = res.id_visita;
+            byId("Id_Visita").value = res.id_visita;
+            toast("Id_Visita reservado: " + res.id_visita);
+            loadAvaliacoes();
+          })
+          .withFailureHandler(err => toast("Erro ao reservar Id_Visita: " + (err.message || err)))
+          .RV_reserveIdVisita_v2();
+      }
+
+      // ===== lookups =====
+      function loadBaseLookups(){
+        google.script.run.withSuccessHandler(function(items){
+          const selAv = byId("avCliente");
+          selAv.innerHTML = `<option value="">Selecione...</option>`;
+          clientesMap = {};
+          items.forEach(it=>{
+            clientesMap[it.id] = it.label;
+            const o2 = document.createElement("option");
+            o2.value = it.id; o2.textContent = it.label;
+            selAv.appendChild(o2);
+          });
+        }).listClientesForSelect();
+
+        google.script.run.withSuccessHandler(function(items){
+          const selF = byId("Id_Imovel");
+          selF.innerHTML  = `<option value="">Selecione...</option>`;
+          items.forEach(it=>{
+            const o2 = document.createElement("option");
+            o2.value = it.id; o2.textContent = it.label;
+            selF.appendChild(o2);
+          });
+        }).listImoveisForSelect();
+      }
+
+      // ===== agenda dropdown =====
+      function loadAgendaSelect(){
+        google.script.run.withSuccessHandler(function(items){
+          const sel = byId("agendaSelect");
+          sel.innerHTML = `<option value="">Selecione...</option>`;
+          items.forEach(it=>{
+            const opt = document.createElement("option");
+            opt.value = String(it.id);
+            opt.textContent = it.label;
+            sel.appendChild(opt);
+          });
+        }).withFailureHandler(err => toast("Erro ao carregar agenda: " + (err.message||err)))
+          .RV_listAgendaForDropdown_v2();
+      }
+
+      function useSelectedAgenda(){
+        if (!byId("Id_Visita").value) return toast("Antes, clique em + Novo para reservar um Id_Visita.");
+        const idAg = byId("agendaSelect").value;
+        if (!idAg) return toast("Selecione uma visita agendada.");
+
+        byId("Id_Agendamento").value = idAg;
+
+        google.script.run
+          .withSuccessHandler(function(ag){
+            if (!ag) return;
+            if (ag["Data"]) byId("Data_Visita").value = ag["Data"];
+            const cod = ag["Imóvel (Código)"];
+            if (cod) byId("Id_Imovel").value = String(cod);
+          })
+          .withFailureHandler(err => toast("Erro ao carregar agenda: " + (err.message || err)))
+          .RV_getAgendaById_v2(idAg);
+      }
+
+      // ===== lista fatos (painel enxuto) =====
+      function loadFatos(){
+        google.script.run.withSuccessHandler(function(items){
+          renderList("listFatos", items, function(it){
+            currentIdVisita = it.id;
+            byId("Id_Visita").value = it.id;
+
+            google.script.run.withSuccessHandler(function(obj){
+              if (obj) {
+                setFormFromObject("fatoForm", obj);
+                byId("Id_Visita").value = it.id;
+              }
+              loadAvaliacoes();
+            }).RV_getFatoByIdVisita_v2(it.id);
+          });
+        }).withFailureHandler(err => toast("Erro ao listar fatos: " + (err.message||err)))
+          .RV_listFatosForPanel_v2();
+      }
+
+      // ===== upload foto =====
+      function clearFicha(){
+        byId("FichaFile").value = "";
+        byId("fichaInfo").innerHTML = "";
+      }
+
+      function uploadFicha(){
+        const idv = String(byId("Id_Visita").value || "").trim();
+        if (!idv) return toast("Clique em + Novo para reservar Id_Visita antes de anexar foto.");
+
+        const input = byId("FichaFile");
+        if (!input.files || !input.files[0]) return toast("Selecione/tire uma foto primeiro.");
+
+        const file = input.files[0];
+        const reader = new FileReader();
+
+        reader.onload = function(){
+          const dataUrl = reader.result; // data:image/...;base64,...
+          byId("fichaInfo").innerHTML = "Enviando foto...";
+
+          google.script.run
+            .withSuccessHandler(function(res){
+              byId("Anexo_Ficha_Visita").value = res.url; // salva URL
+              byId("fichaInfo").innerHTML = `✅ Foto enviada: ${escapeHtml(res.name)}<br/><small>${escapeHtml(res.url)}</small>`;
+              toast("Foto enviada e vinculada à visita.");
+            })
+            .withFailureHandler(function(err){
+              byId("fichaInfo").innerHTML = "";
+              toast("Erro no upload: " + (err.message || err));
+            })
+            .RV_uploadFichaVisita_v2(idv, dataUrl);
+        };
+
+        reader.readAsDataURL(file);
+      }
+
+      // ===== salvar fato =====
+      function saveFato(){
+        try{
+          const obj = formToObject("fatoForm");
+          const idv = String(byId("Id_Visita").value || "").trim();
+          if (!idv) return toast("Clique em + Novo para reservar Id_Visita.");
+
+          const dv = String(obj["Data_Visita"] || "").trim();
+          if (!dv) return toast("Data_Visita é obrigatória.");
+          if (!isValidDDMMYYYY(dv)) return toast("Data_Visita inválida. Use DD/MM/AAAA.");
+
+          obj["Id_Visita"] = idv;
+          obj["Id_Agendamento"] = String(byId("Id_Agendamento").value || "").trim();
+
+          // anexo já está no hidden Anexo_Ficha_Visita via upload
+          obj["Anexo_Ficha_Visita"] = String(byId("Anexo_Ficha_Visita").value || "").trim();
+
+          google.script.run
+            .withSuccessHandler(function(res){
+              toast("Fato_Visitas salvo: " + res.action + " (Id_Visita " + res.id + ")");
+              loadFatos();
+            })
+            .withFailureHandler(err => toast("Erro ao salvar Fato_Visitas: " + (err.message || err)))
+            .RV_upsertFatoVisita_v2(obj);
+
+        } catch(e){
+          toast(e.message || e);
+        }
+      }
+
+      // ===== Avaliação (mantida) =====
+      function buildScoreButtons(){
+        const wrap = byId("scoreArea");
+        wrap.innerHTML = "";
+
+        SCORE_FIELDS.forEach(([key, label])=>{
+          const hidden = document.createElement("input");
+          hidden.type = "hidden";
+          hidden.id = key;
+          hidden.name = key;
+          hidden.value = "0";
+
+          const title = document.createElement("div");
+          title.className = "scoreLabel";
+          title.innerHTML = `<span>${escapeHtml(label)}</span><span class="pill" id="${key}_pill">0</span>`;
+
+          const grid = document.createElement("div");
+          grid.className = "scoreGrid";
+          grid.dataset.scoreKey = key;
+
+          for (let i=0;i<=10;i++){
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.className = "scoreBtn";
+            btn.textContent = String(i);
+            btn.addEventListener("click", ()=> setScore(key, i));
+            grid.appendChild(btn);
+          }
+
+          const block = document.createElement("div");
+          block.appendChild(title);
+          block.appendChild(grid);
+          block.appendChild(hidden);
+          wrap.appendChild(block);
+        });
+      }
+
+      function setScore(key, val){
+        byId(key).value = String(val);
+        byId(key + "_pill").textContent = String(val);
+        const grid = document.querySelector(`.scoreGrid[data-score-key="${key}"]`);
+        if (!grid) return;
+        [...grid.querySelectorAll(".scoreBtn")].forEach(b=>{
+          b.classList.toggle("active", b.textContent === String(val));
+        });
+      }
+
+      function openAvaliacao(){
+        const idv = String(byId("Id_Visita").value || "").trim();
+        if (!idv) return toast("Clique em + Novo para reservar Id_Visita antes de avaliar.");
+
+        byId("avaliacaoBox").style.display = "block";
+        byId("id_Avaliacao").value = "";
+        SCORE_FIELDS.forEach(([k])=>setScore(k, 0));
+        byId("Preco_N10").value = "";
+        attachMoneyMask(byId("Preco_N10"));
+      }
+
+      function closeAvaliacao(){
+        byId("avaliacaoBox").style.display = "none";
+        byId("id_Avaliacao").value = "";
+      }
+
+      function loadAvaliacoes(){
+        const idv = String(byId("Id_Visita").value || "").trim();
+        if (!idv) {
+          byId("listAval").innerHTML = `<div class="hint">Clique em + Novo para reservar Id_Visita e ver avaliações.</div>`;
+          return;
+        }
+
+        google.script.run
+          .withSuccessHandler(function(rows){
+            const el = byId("listAval");
+            el.innerHTML = "";
+            if (!rows || rows.length === 0){
+              el.innerHTML = `<div class="hint">Nenhuma avaliação registrada ainda.</div>`;
+              return;
+            }
+
+            rows.forEach(r=>{
+              const div = document.createElement("div");
+              div.className = "item";
+              const nome = clientesMap[String(r["Id_Cliente"]||"").trim()] || ("Cliente " + (r["Id_Cliente"]||""));
+              div.innerHTML = `<b>${escapeHtml(nome)} • Nota ${escapeHtml(r["Nota_Geral"]||"")}</b>
+                <small>id_Avaliacao: ${escapeHtml(r["id_Avaliacao"]||"")} • Preço N10: ${escapeHtml(r["Preco_N10"]||"")}</small>`;
+
+              div.addEventListener("click", ()=>{
+                byId("avaliacaoBox").style.display = "block";
+                byId("id_Avaliacao").value = r["id_Avaliacao"] || "";
+                byId("avCliente").value = String(r["Id_Cliente"]||"");
+                SCORE_FIELDS.forEach(([k])=>{
+                  const v = Number(r[k] ?? 0);
+                  setScore(k, isNaN(v) ? 0 : v);
+                });
+                byId("Preco_N10").value = (r["Preco_N10"] ?? "");
+                attachMoneyMask(byId("Preco_N10"));
+              });
+
+              el.appendChild(div);
+            });
+          })
+          .withFailureHandler(err => toast("Erro ao listar avaliações: " + (err.message || err)))
+          .VS_listAvaliacoesByVisita(idv);
+      }
+
+      function saveAvaliacao(){
+        try{
+          const idv = String(byId("Id_Visita").value || "").trim();
+          if (!idv) return toast("Id_Visita não definido (clique em + Novo).");
+
+          const idCliente = byId("avCliente").value;
+          if (!idCliente) return toast("Selecione o cliente.");
+
+          attachMoneyMask(byId("Preco_N10"));
+
+          const precoN10El = byId("Preco_N10");
+          const obj = {
+            "id_Avaliacao": byId("id_Avaliacao").value || "",
+            "Id_Visita": idv,
+            "Id_Cliente": idCliente,
+            "Preco_N10": precoN10El.value
+          };
+
+          SCORE_FIELDS.forEach(([k])=> obj[k] = byId(k).value );
+
+          if (precoN10El.value) {
+            const n = parseBRLToNumber(precoN10El.value);
+            if (n === null) return toast("Preço sugerido inválido.");
+            obj["Preco_N10"] = n;
+          }
+
+          google.script.run
+            .withSuccessHandler(function(res){
+              toast("Avaliação salva: " + res.action + " (id_Avaliacao " + res.id + ")");
+              closeAvaliacao();
+              loadAvaliacoes();
+            })
+            .withFailureHandler(err => toast("Erro ao salvar avaliação: " + (err.message || err)))
+            .VS_upsertAvaliacaoByVisitaCliente(obj);
+
+        } catch(e){
+          toast(e.message || e);
+        }
+      }
+
+      // init
+      buildScoreButtons();
+      loadBaseLookups();
+      loadAgendaSelect();
+      loadFatos();
+      clearAll();
+
+      // ✅ aplica máscara sem conflito
+      applyMaskDDMMYYYY(byId("Data_Visita"));
+
+      // money mask no campo de preço do aninhado
+      attachMoneyMask(byId("Preco_N10"));
+    </script>
+  </body>
+</html>

@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <?!= include('Estilos'); ?>
+    <?!= include('JsBase'); ?>
+    <style>
+      /* ✅ layout 70% / 30% */
+      .grid70{
+        display:grid;
+        grid-template-columns: 7fr 3fr;
+        gap: 14px;
+        align-items: start;
+      }
+      @media (max-width: 980px){
+        .grid70{ grid-template-columns: 1fr; }
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="topbar">
+      <div>
+        <div class="title">Leads Compradores</div>
+        <div class="sub">Frente de caixa: contato, visita, proposta, fechamento</div>
+      </div>
+      <div class="btns">
+        <button class="secondary" onclick="nav('Form_Menu')">← Menu</button>
+      </div>
+    </div>
+
+    <div class="grid70">
+      <!-- 70%: Registros + filtros -->
+      <div class="card">
+        <h3>Registros</h3>
+
+        <div class="row" style="margin-top:8px;">
+          <div>
+            <label>Filtro: Bairro</label>
+            <select id="fBairro"></select>
+          </div>
+          <div>
+            <label>Filtro: Tipo Imóvel</label>
+            <select id="fTipo"></select>
+          </div>
+        </div>
+
+        <div class="row">
+          <div>
+            <label>Filtro: Orçamento</label>
+            <select id="fOrc"></select>
+          </div>
+          <div>
+            <label>Filtro: Status</label>
+            <select id="fStatus"></select>
+          </div>
+        </div>
+
+        <div class="row">
+          <div>
+            <label>Filtro: Data Entrada (de)</label>
+            <input id="fDataIni" placeholder="DD/MM/AAAA" />
+          </div>
+          <div>
+            <label>Filtro: Data Entrada (até)</label>
+            <input id="fDataFim" placeholder="DD/MM/AAAA" />
+          </div>
+        </div>
+
+        <div class="btns" style="margin-top:10px;">
+          <button class="secondary" onclick="applyFilters()">Aplicar filtros</button>
+          <button class="secondary" onclick="clearFilters()">Limpar filtros</button>
+          <button class="ok" onclick="newRecord()">+ Novo</button>
+          <button class="secondary" onclick="reloadAll()">Atualizar</button>
+        </div>
+
+        <div class="hint" style="margin-top:10px;">
+          Painel mostra: <b>Nome • Telefone • Tipo Imóvel</b>
+        </div>
+
+        <div style="margin-top:10px" class="list" id="list"></div>
+      </div>
+
+      <!-- 30%: edição -->
+      <div class="card">
+        <h3>Cadastro / Edição</h3>
+
+        <datalist id="dlStatus"></datalist>
+        <datalist id="dlOrigem"></datalist>
+        <datalist id="dlTipoImovel"></datalist>
+        <datalist id="dlFin"></datalist>
+        <datalist id="dlBairro"></datalist>
+
+        <form id="form">
+          <div class="row">
+            <div>
+              <label>Data Entrada (DD/MM/AAAA)</label>
+              <input name="Data Entrada" id="Data Entrada" placeholder="DD/MM/AAAA" />
+            </div>
+            <div>
+              <label>Status</label>
+              <input name="Status" list="dlStatus" placeholder="Novo/Contato/Visita/Proposta/Fechado/Perdido" />
+            </div>
+          </div>
+
+          <div class="row">
+            <div>
+              <label>Nome</label>
+              <input name="Nome" />
+            </div>
+            <div>
+              <label>Telefone (ID)</label>
+              <input name="Telefone" id="Telefone" inputmode="numeric" placeholder="somente números" />
+            </div>
+          </div>
+
+          <div class="row">
+            <div>
+              <label>Origem</label>
+              <input name="Origem" list="dlOrigem" />
+            </div>
+            <div>
+              <label>Orçamento</label>
+              <input name="Orçamento" placeholder="ex.: 900k / 1,2M / 900–1,2M" />
+            </div>
+          </div>
+
+          <div class="row">
+            <div>
+              <label>Bairro</label>
+              <input name="Bairro" list="dlBairro" placeholder="Asa Norte / Sudoeste..." />
+            </div>
+            <div>
+              <label>Tipo Imóvel</label>
+              <input name="Tipo Imóvel" list="dlTipoImovel" placeholder="2Q / 3Q / Cobertura..." />
+            </div>
+          </div>
+
+          <div class="row">
+            <div>
+              <label>Financiamento?</label>
+              <input name="Financiamento?" list="dlFin" placeholder="Sim/Não" />
+            </div>
+            <div>
+              <label>(opcional)</label>
+              <input disabled placeholder=" " />
+            </div>
+          </div>
+
+          <div class="row">
+            <div>
+              <label>Último Contato (DD/MM/AAAA)</label>
+              <input name="Último Contato" id="Último Contato" placeholder="DD/MM/AAAA" />
+            </div>
+            <div>
+              <label>Próximo Follow-up (DD/MM/AAAA)</label>
+              <input name="Próximo Follow-up" id="Próximo Follow-up" placeholder="DD/MM/AAAA" />
+            </div>
+          </div>
+
+          <label>Observações</label>
+          <textarea name="Observações"></textarea>
+        </form>
+
+        <div class="btns">
+          <button class="ok" onclick="save()">Salvar</button>
+          <button class="secondary" onclick="clearForm('form'); currentId=null;">Limpar</button>
+          <button class="danger" onclick="remove()">Excluir</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const SHEET = "Leads_Compradores";
+      const IDCOL = "Telefone";
+      let currentId = null;
+
+      // ===== máscara data estável =====
+      function onlyDigits(s){ return String(s||"").replace(/\D/g,""); }
+      function maskDDMMYYYY(input){
+        if (!input) return;
+        input.addEventListener("input", ()=>{
+          const d = onlyDigits(input.value).slice(0,8);
+          let out = "";
+          out += d.slice(0,2);
+          if (d.length > 2) out += "/" + d.slice(2,4);
+          if (d.length > 4) out += "/" + d.slice(4,8);
+          input.value = out;
+        });
+      }
+      function isValidDDMMYYYY(s){
+        if (!/^\d{2}\/\d{2}\/\d{4}$/.test(s)) return false;
+        const [dd,mm,yyyy] = s.split("/").map(Number);
+        if (yyyy < 1900 || yyyy > 2100) return false;
+        if (mm < 1 || mm > 12) return false;
+        const dt = new Date(yyyy, mm-1, dd);
+        return dt.getFullYear()===yyyy && (dt.getMonth()+1)===mm && dt.getDate()===dd;
+      }
+      function validate(obj){
+        const tel = String(obj["Telefone"]||"").trim().replace(/\D/g,"");
+        if (!tel) throw new Error("Telefone é o ID (obrigatório).");
+        if (!/^\d{8,15}$/.test(tel)) throw new Error("Telefone inválido. Use apenas números.");
+
+        const reqDates = ["Data Entrada", "Último Contato", "Próximo Follow-up"];
+        for (const k of reqDates){
+          const v = String(obj[k]||"").trim();
+          if (!v) throw new Error(`Campo obrigatório: ${k}.`);
+          if (!isValidDDMMYYYY(v)) throw new Error(`Data inválida em "${k}". Use DD/MM/AAAA.`);
+        }
+        obj["Telefone"] = tel;
+      }
+
+      // ===== datalists (cadastro) =====
+      const PRESETS = {
+        "Status": ["Novo","Contato","Visita","Proposta","Fechado","Perdido","Frio","Morno"],
+        "Origem": ["Empresa","Indicação","OLX","Zap","VivaReal","Instagram","Facebook","WhatsApp","Porteiro","Placa"],
+        "Tipo Imóvel": ["2Q","3Q","1Q","Cobertura","Kitnet","Casa","Sala Comercial","Loft"],
+        "Financiamento?": ["Sim","Não"],
+        "Bairro": ["Asa Norte","Asa Sul","Sudoeste","Noroeste","Lago Norte","Lago Sul","Octogonal"]
+      };
+
+      function fillDatalist(id, values){
+        const dl = document.getElementById(id);
+        if (!dl) return;
+        dl.innerHTML = "";
+        (values||[]).forEach(v=>{
+          const opt = document.createElement("option");
+          opt.value = v;
+          dl.appendChild(opt);
+        });
+      }
+
+      function mergeUnique(a,b){
+        const set = new Set();
+        (a||[]).forEach(x=>{ x=String(x||"").trim(); if(x) set.add(x); });
+        (b||[]).forEach(x=>{ x=String(x||"").trim(); if(x) set.add(x); });
+        return Array.from(set).sort((x,y)=>x.localeCompare(y,"pt-BR"));
+      }
+
+      function loadDatalists(){
+        fillDatalist("dlStatus", PRESETS["Status"]);
+        fillDatalist("dlOrigem", PRESETS["Origem"]);
+        fillDatalist("dlTipoImovel", PRESETS["Tipo Imóvel"]);
+        fillDatalist("dlFin", PRESETS["Financiamento?"]);
+        fillDatalist("dlBairro", PRESETS["Bairro"]);
+
+        google.script.run
+          .withSuccessHandler(function(map){
+            fillDatalist("dlStatus", mergeUnique(PRESETS["Status"], (map&&map["Status"])||[]));
+            fillDatalist("dlOrigem", mergeUnique(PRESETS["Origem"], (map&&map["Origem"])||[]));
+            fillDatalist("dlTipoImovel", mergeUnique(PRESETS["Tipo Imóvel"], (map&&map["Tipo Imóvel"])||[]));
+            fillDatalist("dlFin", mergeUnique(PRESETS["Financiamento?"], (map&&map["Financiamento?"])||[]));
+            fillDatalist("dlBairro", mergeUnique(PRESETS["Bairro"], (map&&map["Bairro"])||[]));
+          })
+          .getDistinctValues(SHEET, ["Status","Origem","Tipo Imóvel","Financiamento?","Bairro"]);
+      }
+
+      // ===== filtros (dropdown) =====
+      function fillSelect(sel, items){
+        sel.innerHTML = `<option value="">(todos)</option>`;
+        (items||[]).forEach(v=>{
+          const opt = document.createElement("option");
+          opt.value = v;
+          opt.textContent = v;
+          sel.appendChild(opt);
+        });
+      }
+
+      function loadFilterOptions(){
+        google.script.run
+          .withSuccessHandler(function(res){
+            fillSelect(byId("fBairro"), (res && res.Bairro) || []);
+            fillSelect(byId("fTipo"), (res && res["Tipo Imóvel"]) || []);
+            fillSelect(byId("fOrc"), (res && res["Orçamento"]) || []);
+            fillSelect(byId("fStatus"), (res && res["Status"]) || []);
+          })
+          .withFailureHandler(function(err){
+            console.log("Filtro options error:", err);
+          })
+          .LC_getDistinctFilters_v4();
+      }
+
+      function currentFilters(){
+        return {
+          bairro: String(byId("fBairro").value || "").trim(),
+          tipoImovel: String(byId("fTipo").value || "").trim(),
+          orcamento: String(byId("fOrc").value || "").trim(),
+          status: String(byId("fStatus").value || "").trim(),
+          dataIni: String(byId("fDataIni").value || "").trim(),
+          dataFim: String(byId("fDataFim").value || "").trim()
+        };
+      }
+
+      function applyFilters(){ loadList(currentFilters()); }
+
+      function clearFilters(){
+        byId("fBairro").value = "";
+        byId("fTipo").value = "";
+        byId("fOrc").value = "";
+        byId("fStatus").value = "";
+        byId("fDataIni").value = "";
+        byId("fDataFim").value = "";
+        loadList({});
+      }
+
+      function reloadAll(){
+        loadFilterOptions();
+        loadDatalists();
+        loadList(currentFilters());
+      }
+
+      // ===== lista =====
+      function loadList(filters){
+        google.script.run
+          .withSuccessHandler(function(items){
+            renderList("list", items, function(it){
+              currentId = it.id;
+              google.script.run
+                .withSuccessHandler(function(obj){
+                  if (!obj) return toast("Registro não encontrado.");
+                  setFormFromObject("form", obj);
+                })
+                .withFailureHandler(function(err){
+                  toast("Erro ao carregar: " + (err.message || err));
+                })
+                .getById(SHEET, IDCOL, it.id);
+            });
+          })
+          .withFailureHandler(function(err){
+            toast("Erro ao listar: " + (err.message || err));
+          })
+          .LC_listForPanelFiltered_v4(filters || {});
+      }
+
+      function newRecord(){ currentId=null; clearForm("form"); }
+
+      function save(){
+        try{
+          const obj = formToObject("form");
+          validate(obj);
+
+          google.script.run
+            .withSuccessHandler(function(res){
+              toast("Salvo: " + res.action + " (" + res.id + ")");
+              currentId = res.id;
+              loadFilterOptions();
+              loadList(currentFilters());
+            })
+            .withFailureHandler(function(err){
+              toast("Erro ao salvar: " + (err.message || err));
+            })
+            .upsertById(SHEET, IDCOL, obj);
+
+        }catch(e){
+          toast(e.message || e);
+        }
+      }
+
+      function remove(){
+        const obj = formToObject("form");
+        const id = String(obj[IDCOL] || currentId || "").replace(/\D/g,"").trim();
+        if (!id) return toast("Informe o Telefone para excluir.");
+        if (!confirm("Excluir Telefone " + id + "?")) return;
+
+        google.script.run
+          .withSuccessHandler(function(res){
+            toast(res.ok ? "Excluído." : ("Não excluído: " + res.message));
+            newRecord(); loadList(currentFilters());
+          })
+          .withFailureHandler(function(err){
+            toast("Erro ao excluir: " + (err.message || err));
+          })
+          .deleteById(SHEET, IDCOL, id);
+      }
+
+      // máscaras
+      maskDDMMYYYY(document.getElementById("Data Entrada"));
+      maskDDMMYYYY(document.getElementById("Último Contato"));
+      maskDDMMYYYY(document.getElementById("Próximo Follow-up"));
+      maskDDMMYYYY(document.getElementById("fDataIni"));
+      maskDDMMYYYY(document.getElementById("fDataFim"));
+
+      // init
+      loadFilterOptions();
+      loadDatalists();
+      loadList({});
+    </script>
+  </body>
+</html>

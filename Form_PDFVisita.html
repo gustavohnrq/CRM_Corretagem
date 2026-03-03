@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <?!= include('Estilos'); ?>
+    <?!= include('JsBase'); ?>
+  </head>
+  <body>
+    <div class="topbar">
+      <div>
+        <div class="title">PDF Visitas</div>
+        <div class="sub">Selecione uma visita e gere o PDF</div>
+      </div>
+      <div class="btns">
+        <button class="secondary" onclick="nav('Form_Menu')">← Menu</button>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h3>Selecionar visita</h3>
+
+        <label>Visita (Id_Visita)</label>
+        <select id="visitaSelect"></select>
+
+        <div class="btns" style="margin-top:10px;">
+          <button class="secondary" type="button" onclick="reload()">Atualizar lista</button>
+          <button class="ok" type="button" onclick="loadPayload()">Carregar dados</button>
+        </div>
+
+        <div class="hint" style="margin-top:10px;">
+          Se não aparecer, confira se a visita foi salva em <b>Fato_Visitas</b>.
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Prévia</h3>
+        <div id="preview" class="hint">Selecione uma visita e clique em “Carregar dados”.</div>
+
+        <div class="btns" style="margin-top:12px;">
+          <button class="ok" type="button" onclick="generatePdf()">Gerar PDF</button>
+        </div>
+
+        <div id="pdfResult" class="hint" style="margin-top:10px;"></div>
+      </div>
+    </div>
+
+    <script>
+      let currentPayload = null;
+
+      function selectedVisitaId(){
+        return String(byId("visitaSelect").value || "").trim();
+      }
+
+      function fillSelect(sel, items){
+        sel.innerHTML = `<option value="">Selecione...</option>`;
+        (items || []).forEach(it=>{
+          const opt = document.createElement("option");
+          opt.value = String(it.id ?? "");
+          opt.textContent = it.label || String(it.id ?? "");
+          sel.appendChild(opt);
+        });
+      }
+
+      function reload(){
+        const sel = byId("visitaSelect");
+        byId("preview").innerHTML = `<div class="hint">Carregando lista...</div>`;
+        byId("pdfResult").innerHTML = "";
+        currentPayload = null;
+
+        google.script.run
+          .withSuccessHandler(function(items){
+            fillSelect(sel, items);
+            byId("preview").innerHTML = `<div class="hint">Selecione uma visita e clique em “Carregar dados”.</div>`;
+            toast("Lista atualizada.");
+          })
+          .withFailureHandler(function(err){
+            byId("preview").innerHTML = "";
+            toast("Erro ao carregar visitas: " + (err && err.message ? err.message : err));
+          })
+          .PDF_listVisitasForSelect_v1();
+      }
+
+      function loadPayload(){
+        const id = selectedVisitaId();
+        if (!id) return toast("Selecione uma visita.");
+
+        byId("preview").innerHTML = "Carregando...";
+        byId("pdfResult").innerHTML = "";
+        currentPayload = null;
+
+        google.script.run
+          .withSuccessHandler(function(data){
+            if (!data) {
+              byId("preview").innerHTML = "";
+              return toast("Visita não encontrada (payload vazio).");
+            }
+            currentPayload = data;
+            renderPreview(data);
+          })
+          .withFailureHandler(function(err){
+            byId("preview").innerHTML = "";
+            toast("Erro ao carregar dados: " + (err && err.message ? err.message : err));
+          })
+          .PDF_getVisitaPayload_v1(id);
+      }
+
+      function renderPreview(data){
+        const avs = data.avaliacoes || [];
+
+        let html = `<div class="card" style="margin:0;">
+          <b>Visita:</b> ${escapeHtml(data.id_visita)}<br/>
+          <b>Data:</b> ${escapeHtml(data.data_visita || "")}<br/>
+          <b>Imóvel:</b> ${escapeHtml(data.id_imovel || "")}<br/>
+          <b>Nota média:</b> ${data.nota_media !== null ? Number(data.nota_media).toFixed(2) : "-"}<br/>
+        </div>`;
+
+        if (data.anexo_ficha_visita) {
+          html += `<div style="margin-top:8px;">
+            <b>Ficha (anexo):</b> <a target="_blank" href="${escapeHtml(data.anexo_ficha_visita)}">abrir</a>
+          </div>`;
+        }
+
+        html += `<div style="margin-top:12px;"><b>Avaliações (${avs.length}):</b></div>`;
+        if (!avs.length) {
+          html += `<div class="hint">Nenhuma avaliação registrada.</div>`;
+        } else {
+          html += `<div class="list" style="margin-top:8px;">`;
+          avs.forEach(a=>{
+            html += `<div class="item">
+              <b>${escapeHtml(a.Cliente_Nome || "")}</b>
+              <small>Nota geral: ${escapeHtml(String(a.Nota_Geral ?? ""))} • Preço N10: ${escapeHtml(String(a.Preco_N10 ?? ""))}</small>
+            </div>`;
+          });
+          html += `</div>`;
+        }
+
+        byId("preview").innerHTML = html;
+      }
+
+      function generatePdf(){
+        const id = selectedVisitaId();
+        if (!id) return toast("Selecione uma visita.");
+
+        byId("pdfResult").innerHTML = "Gerando PDF...";
+
+        google.script.run
+          .withSuccessHandler(function(res){
+            // ✅ agora trata ok:false (mensagem vinda do servidor)
+            if (!res || !res.ok) {
+              byId("pdfResult").innerHTML = "";
+              return toast((res && res.message) ? res.message : "Falha ao gerar PDF.");
+            }
+
+            byId("pdfResult").innerHTML =
+              `✅ PDF gerado: <a target="_blank" href="${escapeHtml(res.url)}">${escapeHtml(res.name)}</a>`;
+
+            toast("PDF gerado.");
+          })
+          .withFailureHandler(function(err){
+            byId("pdfResult").innerHTML = "";
+            toast("Erro ao gerar PDF: " + (err && err.message ? err.message : err));
+          })
+          // ✅ sempre envia visitaId corretamente
+          .Gerar_PDF_Visita({ visitaId: id });
+      }
+
+      reload();
+    </script>
+  </body>
+</html>

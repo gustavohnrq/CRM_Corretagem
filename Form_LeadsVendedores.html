@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <?!= include('Estilos'); ?>
+    <?!= include('JsBase'); ?>
+  </head>
+  <body>
+    <div class="topbar">
+      <div>
+        <div class="title">Leads Vendedores</div>
+        <div class="sub">Frente de captação: contato, visita, avaliação, captação</div>
+      </div>
+      <div class="btns">
+        <button class="secondary" onclick="nav('Form_Menu')">← Menu</button>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h3>Registros</h3>
+        <div class="btns">
+          <button class="secondary" onclick="loadList()">Atualizar lista</button>
+          <button class="ok" onclick="newRecord()">+ Novo</button>
+        </div>
+        <div style="margin-top:10px" class="list" id="list"></div>
+      </div>
+
+      <div class="card">
+        <h3>Cadastro / Edição</h3>
+
+        <!-- datalists -->
+        <datalist id="dlStatus"></datalist>
+        <datalist id="dlTipoImovel"></datalist>
+        <datalist id="dlExclusividade"></datalist>
+        <datalist id="dlQuadra"></datalist>
+
+        <form id="form">
+          <div class="row">
+            <div>
+              <label>Data Entrada (DD/MM/AAAA)</label>
+              <input name="Data Entrada" id="Data Entrada" placeholder="DD/MM/AAAA" />
+            </div>
+            <div>
+              <label>Status</label>
+              <input name="Status" list="dlStatus" placeholder="Contato/Visita/Avaliação/Captação/Perdido" />
+            </div>
+          </div>
+
+          <div class="row">
+            <div>
+              <label>Nome Proprietário</label>
+              <input name="Nome Proprietário" />
+            </div>
+            <div>
+              <label>Telefone (ID)</label>
+              <input name="Telefone" id="Telefone" inputmode="numeric" placeholder="somente números" />
+            </div>
+          </div>
+
+          <div class="row">
+            <div>
+              <label>Quadra/Endereço</label>
+              <input name="Quadra/Endereço" list="dlQuadra" placeholder="308 Norte / SQN..." />
+            </div>
+            <div>
+              <label>Tipo Imóvel</label>
+              <input name="Tipo Imóvel" list="dlTipoImovel" placeholder="Apartamento / Cobertura..." />
+            </div>
+          </div>
+
+          <div class="row">
+            <div>
+              <label>Valor Pedido</label>
+              <input name="Valor Pedido" placeholder="ex.: 1200000 / 1,2M" />
+            </div>
+            <div>
+              <label>Exclusividade?</label>
+              <input name="Exclusividade?" list="dlExclusividade" placeholder="Sim/Não" />
+            </div>
+          </div>
+
+          <div class="row">
+            <div>
+              <label>Último Contato (DD/MM/AAAA)</label>
+              <input name="Último Contato" id="Último Contato" placeholder="DD/MM/AAAA" />
+            </div>
+            <div>
+              <label>Próximo Follow-up (DD/MM/AAAA)</label>
+              <input name="Próximo Follow-up" id="Próximo Follow-up" placeholder="DD/MM/AAAA" />
+            </div>
+          </div>
+
+          <label>Observações</label>
+          <textarea name="Observações"></textarea>
+        </form>
+
+        <div class="btns">
+          <button class="ok" onclick="save()">Salvar</button>
+          <button class="secondary" onclick="clearForm('form'); currentId=null;">Limpar</button>
+          <button class="danger" onclick="remove()">Excluir</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const SHEET = "Leads_Vendedores";
+      const IDCOL = "Telefone";
+      let currentId = null;
+
+      // ===== máscaras e validação de data =====
+      function onlyDigits(s){ return String(s||"").replace(/\D/g,""); }
+
+      function maskDDMMYYYY(input){
+        if (!input) return;
+        input.addEventListener("input", ()=>{
+          const d = onlyDigits(input.value).slice(0,8);
+          let out = "";
+          out += d.slice(0,2);
+          if (d.length > 2) out += "/" + d.slice(2,4);
+          if (d.length > 4) out += "/" + d.slice(4,8);
+          input.value = out;
+        });
+      }
+
+      function isValidDDMMYYYY(s){
+        if (!/^\d{2}\/\d{2}\/\d{4}$/.test(s)) return false;
+        const [dd,mm,yyyy] = s.split("/").map(Number);
+        if (yyyy < 1900 || yyyy > 2100) return false;
+        if (mm < 1 || mm > 12) return false;
+        const dt = new Date(yyyy, mm-1, dd);
+        return dt.getFullYear()===yyyy && (dt.getMonth()+1)===mm && dt.getDate()===dd;
+      }
+
+      function validate(obj){
+        const tel = String(obj["Telefone"]||"").trim();
+        if (!tel) throw new Error("Telefone é o ID (obrigatório).");
+        if (!/^\d{8,15}$/.test(tel.replace(/\D/g,""))) throw new Error("Telefone inválido. Use apenas números.");
+
+        const reqDates = ["Data Entrada", "Último Contato", "Próximo Follow-up"];
+        for (const k of reqDates){
+          const v = String(obj[k]||"").trim();
+          if (!v) throw new Error(`Campo obrigatório: ${k}.`);
+          if (!isValidDDMMYYYY(v)) throw new Error(`Data inválida em "${k}". Use DD/MM/AAAA.`);
+        }
+      }
+
+      // ===== datalists (presets + planilha) =====
+      const PRESETS = {
+        "Status": ["Contato","Visita","Avaliação","Captação","Perdido","Frio","Morno"],
+        "Tipo Imóvel": ["Apartamento","Cobertura","Kitnet","Casa","Sala Comercial","Loft"],
+        "Exclusividade?": ["Sim","Não"],
+        "Quadra/Endereço": ["Asa Norte","Asa Sul","Sudoeste","Noroeste","Lago Norte","Lago Sul","SQN","SQS"]
+      };
+
+      function fillDatalist(id, values){
+        const dl = document.getElementById(id);
+        if (!dl) return;
+        dl.innerHTML = "";
+        (values||[]).forEach(v=>{
+          const opt = document.createElement("option");
+          opt.value = v;
+          dl.appendChild(opt);
+        });
+      }
+
+      function mergeUnique(a,b){
+        const set = new Set();
+        (a||[]).forEach(x=>{ x=String(x||"").trim(); if(x) set.add(x); });
+        (b||[]).forEach(x=>{ x=String(x||"").trim(); if(x) set.add(x); });
+        return Array.from(set).sort((x,y)=>x.localeCompare(y,"pt-BR"));
+      }
+
+      function loadDatalists(){
+        fillDatalist("dlStatus", PRESETS["Status"]);
+        fillDatalist("dlTipoImovel", PRESETS["Tipo Imóvel"]);
+        fillDatalist("dlExclusividade", PRESETS["Exclusividade?"]);
+        fillDatalist("dlQuadra", PRESETS["Quadra/Endereço"]);
+
+        google.script.run
+          .withSuccessHandler(function(map){
+            fillDatalist("dlStatus", mergeUnique(PRESETS["Status"], (map&&map["Status"])||[]));
+            fillDatalist("dlTipoImovel", mergeUnique(PRESETS["Tipo Imóvel"], (map&&map["Tipo Imóvel"])||[]));
+            fillDatalist("dlExclusividade", mergeUnique(PRESETS["Exclusividade?"], (map&&map["Exclusividade?"])||[]));
+            fillDatalist("dlQuadra", mergeUnique(PRESETS["Quadra/Endereço"], (map&&map["Quadra/Endereço"])||[]));
+          })
+          .withFailureHandler(function(err){
+            console.log("Datalist error:", err);
+          })
+          .getDistinctValues(SHEET, ["Status","Tipo Imóvel","Exclusividade?","Quadra/Endereço"]);
+      }
+
+      // ===== LISTA: usa funções exclusivas LVD_* =====
+      function loadList(){
+        google.script.run
+          .withSuccessHandler(function(items){
+            renderList("list", items, function(it){
+              currentId = it.id;
+              google.script.run
+                .withSuccessHandler(function(obj){
+                  if (!obj) return toast("Registro não encontrado.");
+                  setFormFromObject("form", obj);
+                })
+                .withFailureHandler(function(err){
+                  toast("Erro ao carregar: " + (err.message || err));
+                })
+                .LVD_getById_v2(it.id);
+            });
+            loadDatalists();
+          })
+          .withFailureHandler(function(err){
+            toast("Erro ao atualizar lista: " + (err.message || err));
+          })
+          .LVD_listForPanel_v2();
+      }
+
+      function newRecord(){ currentId=null; clearForm("form"); }
+
+      function save(){
+        try{
+          const obj = formToObject("form");
+          obj["Telefone"] = String(obj["Telefone"]||"").replace(/\D/g,"").trim();
+          validate(obj);
+
+          google.script.run
+            .withSuccessHandler(function(res){
+              toast("Salvo: " + res.action + " (" + res.id + ")");
+              currentId = res.id;
+              loadList();
+            })
+            .withFailureHandler(function(err){
+              toast("Erro ao salvar: " + (err.message || err));
+            })
+            .upsertById(SHEET, IDCOL, obj);
+
+        }catch(e){
+          toast(e.message || e);
+        }
+      }
+
+      function remove(){
+        const obj = formToObject("form");
+        const id = String(obj[IDCOL] || currentId || "").replace(/\D/g,"").trim();
+        if (!id) return toast("Informe o Telefone para excluir.");
+        if (!confirm("Excluir Telefone " + id + "?")) return;
+
+        google.script.run
+          .withSuccessHandler(function(res){
+            toast(res.ok ? "Excluído." : ("Não excluído: " + res.message));
+            newRecord(); loadList();
+          })
+          .withFailureHandler(function(err){
+            toast("Erro ao excluir: " + (err.message || err));
+          })
+          .deleteById(SHEET, IDCOL, id);
+      }
+
+      // máscaras de data
+      maskDDMMYYYY(document.getElementById("Data Entrada"));
+      maskDDMMYYYY(document.getElementById("Último Contato"));
+      maskDDMMYYYY(document.getElementById("Próximo Follow-up"));
+
+      loadList();
+    </script>
+  </body>
+</html>

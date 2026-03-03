@@ -1,0 +1,431 @@
+<!-- Form_BaseClientes.html (COMPLETO) -->
+<!DOCTYPE html>
+<html>
+  <head>
+    <?!= include('Estilos'); ?>
+    <?!= include('JsBase'); ?>
+  </head>
+  <body>
+    <div class="topbar">
+      <div>
+        <div class="title">Base de Clientes</div>
+        <div class="sub">Carteira estratégica (relacionamento / indicação / reativação)</div>
+      </div>
+      <div class="btns">
+        <button class="secondary" onclick="nav('Form_Menu')">← Menu</button>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h3>Registros</h3>
+        <div class="hint">Clique em um item para carregar no formulário.</div>
+        <div class="btns">
+          <button class="secondary" onclick="loadList()">Atualizar lista</button>
+          <button class="ok" onclick="newRecord()">+ Novo</button>
+        </div>
+        <div style="margin-top:10px" class="list" id="list"></div>
+      </div>
+
+      <div class="card">
+        <h3>Cadastro / Edição</h3>
+
+        <!-- datalists (listas suspensas com opção de digitar novo) -->
+        <datalist id="dlTipo"></datalist>
+        <datalist id="dlOrigem"></datalist>
+        <datalist id="dlFormaPag"></datalist>
+        <datalist id="dlBanco"></datalist>
+        <datalist id="dlPrazo"></datalist>
+        <datalist id="dlPerfil"></datalist>
+        <datalist id="dlRegiao"></datalist>
+        <datalist id="dlTipoImovel"></datalist>
+        <datalist id="dlVaga"></datalist>
+        <datalist id="dlPosicao"></datalist>
+        <datalist id="dlAndar"></datalist>
+        <datalist id="dlStatus"></datalist>
+        <datalist id="dlPotencial"></datalist>
+        <datalist id="dlOutroImovel"></datalist>
+        <datalist id="dlMotivoPerda"></datalist>
+
+        <form id="form">
+          <div class="row">
+            <div>
+              <label>ID</label>
+              <input name="ID" placeholder="(automático se vazio)" />
+            </div>
+            <div>
+              <label>Tipo</label>
+              <input name="Tipo" list="dlTipo" placeholder="Comprador" />
+            </div>
+          </div>
+
+          <div class="row">
+            <div>
+              <label>Nome Completo</label>
+              <input name="Nome Completo" />
+            </div>
+            <div>
+              <label>Telefone</label>
+              <input name="Telefone" inputmode="numeric" />
+            </div>
+          </div>
+
+          <div class="row">
+            <div>
+              <label>Email</label>
+              <input name="Email" />
+            </div>
+            <div>
+              <label>Instagram</label>
+              <input name="Instagram" />
+            </div>
+          </div>
+
+          <div class="row">
+            <div>
+              <label>Origem</label>
+              <input name="Origem" list="dlOrigem" placeholder="Indicação / OLX / Empresa / Porteiro..." />
+            </div>
+            <div>
+              <label>Profissão</label>
+              <input name="Profissão" />
+            </div>
+          </div>
+
+          <div class="row">
+            <div>
+              <label>Local de Trabalho</label>
+              <input name="Local de Trabalho" />
+            </div>
+            <div>
+              <label>Faixa de Orçamento</label>
+              <input name="Faixa de Orçamento" placeholder="900k–1,2M" />
+            </div>
+          </div>
+
+          <div class="row">
+            <div>
+              <label>Forma de Pagamento</label>
+              <input name="Forma de Pagamento" list="dlFormaPag" placeholder="Financiamento / À vista / FGTS" />
+            </div>
+            <div>
+              <label>Banco</label>
+              <input name="Banco" list="dlBanco" />
+            </div>
+          </div>
+
+          <div class="row">
+            <div>
+              <label>Prazo de Compra</label>
+              <input name="Prazo de Compra" list="dlPrazo" placeholder="Imediato / 3 meses / 6 meses..." />
+            </div>
+            <div>
+              <label>Perfil (Moradia/Investimento)</label>
+              <input name="Perfil (Moradia/Investimento)" list="dlPerfil" />
+            </div>
+          </div>
+
+          <div class="row">
+            <div>
+              <label>Região de Interesse</label>
+              <input name="Região de Interesse" list="dlRegiao" placeholder="Asa Norte, 308–315..." />
+            </div>
+            <div>
+              <label>Tipo de Imóvel</label>
+              <input name="Tipo de Imóvel" list="dlTipoImovel" placeholder="2Q / 3Q / Cobertura..." />
+            </div>
+          </div>
+
+          <div class="row">
+            <div>
+              <label>Metragem Desejada</label>
+              <input name="Metragem Desejada" />
+            </div>
+            <div>
+              <label>Vaga</label>
+              <input name="Vaga" list="dlVaga" placeholder="Sim / Não / 2 vagas" />
+            </div>
+          </div>
+
+          <div class="row">
+            <div>
+              <label>Posição</label>
+              <input name="Posição" list="dlPosicao" placeholder="Nascente / Vazado..." />
+            </div>
+            <div>
+              <label>Andar</label>
+              <input name="Andar" list="dlAndar" placeholder="Alto / Baixo..." />
+            </div>
+          </div>
+
+          <div class="row">
+            <div>
+              <label>Data Primeiro Contato (DD/MM/AAAA)</label>
+              <input name="Data Primeiro Contato" id="Data Primeiro Contato" type="text" placeholder="DD/MM/AAAA" />
+            </div>
+            <div>
+              <label>Último Contato (DD/MM/AAAA)</label>
+              <input name="Último Contato" id="Último Contato" type="text" placeholder="DD/MM/AAAA" />
+            </div>
+          </div>
+
+          <div class="row">
+            <div>
+              <label>Próximo Follow-up (DD/MM/AAAA)</label>
+              <input name="Próximo Follow-up" id="Próximo Follow-up" type="text" placeholder="DD/MM/AAAA" />
+            </div>
+            <div>
+              <label>Status Atual</label>
+              <input name="Status Atual" list="dlStatus" placeholder="Ativo / Frio / Negociação / Fechado" />
+            </div>
+          </div>
+
+          <div class="row">
+            <div>
+              <label>Potencial de Indicação</label>
+              <input name="Potencial de Indicação" list="dlPotencial" placeholder="Alto / Médio / Baixo" />
+            </div>
+            <div>
+              <label>Tem Outro Imóvel?</label>
+              <input name="Tem Outro Imóvel?" list="dlOutroImovel" placeholder="Sim / Não" />
+            </div>
+          </div>
+
+          <div class="row">
+            <div>
+              <label>Data de Aniversário (DD/MM)</label>
+              <input name="Data de Aniversário" id="Data de Aniversário" type="text" placeholder="DD/MM" />
+            </div>
+            <div>
+              <label>Motivo Perda</label>
+              <input name="Motivo Perda" list="dlMotivoPerda" />
+            </div>
+          </div>
+
+          <label>Observações</label>
+          <textarea name="Observações"></textarea>
+        </form>
+
+        <div class="btns">
+          <button class="ok" onclick="save()">Salvar</button>
+          <button class="secondary" onclick="clearForm('form'); currentId=null;">Limpar</button>
+          <button class="danger" onclick="remove()">Excluir</button>
+        </div>
+
+        <div class="hint" style="margin-top:10px">
+          Dica: mantenha “Próximo Follow-up” sempre preenchido para rodar sua rotina Seg–Sáb.
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const SHEET = "Base_Clientes";
+      const IDCOL = "ID";
+      let currentId = null;
+
+      // -------- máscaras / validações BR --------
+      function onlyDigits(s){ return String(s||"").replace(/\D/g,""); }
+
+      function maskDDMMYYYY(input){
+        if (!input) return;
+        input.addEventListener("input", ()=>{
+          const d = onlyDigits(input.value).slice(0,8);
+          let out = "";
+          out += d.slice(0,2);
+          if (d.length > 2) out += "/" + d.slice(2,4);
+          if (d.length > 4) out += "/" + d.slice(4,8);
+          input.value = out;
+        });
+      }
+
+      function maskDDMM(input){
+        if (!input) return;
+        input.addEventListener("input", ()=>{
+          const d = onlyDigits(input.value).slice(0,4);
+          let out = "";
+          out += d.slice(0,2);
+          if (d.length > 2) out += "/" + d.slice(2,4);
+          input.value = out;
+        });
+      }
+
+      function isValidDDMMYYYY(s){
+        if (!/^\d{2}\/\d{2}\/\d{4}$/.test(s)) return false;
+        const [dd,mm,yyyy] = s.split("/").map(Number);
+        if (yyyy < 1900 || yyyy > 2100) return false;
+        if (mm < 1 || mm > 12) return false;
+        const dt = new Date(yyyy, mm-1, dd);
+        return dt.getFullYear()===yyyy && (dt.getMonth()+1)===mm && dt.getDate()===dd;
+      }
+
+      function isValidDDMM(s){
+        if (!/^\d{2}\/\d{2}$/.test(s)) return false;
+        const [dd,mm] = s.split("/").map(Number);
+        if (mm < 1 || mm > 12) return false;
+        if (dd < 1 || dd > 31) return false;
+        return true;
+      }
+
+      function validateDates(obj){
+        const required = ["Data Primeiro Contato","Último Contato","Próximo Follow-up"];
+        for (const k of required){
+          const v = String(obj[k]||"").trim();
+          if (!v) throw new Error(`Campo obrigatório: ${k}.`);
+          if (!isValidDDMMYYYY(v)) throw new Error(`Data inválida em "${k}". Use DD/MM/AAAA.`);
+        }
+        const b = String(obj["Data de Aniversário"]||"").trim();
+        if (b && !isValidDDMM(b)) throw new Error(`Data de Aniversário inválida. Use DD/MM.`);
+      }
+
+      // -------- datalists (presets + planilha) --------
+      const PRESETS = {
+        "Tipo": ["Comprador","Vendedor","Investidor"],
+        "Origem": ["Indicação","Empresa","OLX","Zap","VivaReal","Porteiro","Placa","Instagram","Facebook","WhatsApp"],
+        "Forma de Pagamento": ["Financiamento","À vista","FGTS","Consórcio","Permuta"],
+        "Banco": ["Caixa","Banco do Brasil","Bradesco","Itaú","Santander","BRB"],
+        "Prazo de Compra": ["Imediato","30 dias","60 dias","90 dias","3 meses","6 meses","12 meses"],
+        "Perfil (Moradia/Investimento)": ["Moradia","Investimento","Ambos"],
+        "Região de Interesse": ["Asa Norte","Asa Sul","Sudoeste","Noroeste","Lago Norte","Lago Sul","Octogonal"],
+        "Tipo de Imóvel": ["Apartamento","Cobertura","Kitnet","Casa","Sala Comercial","Loft"],
+        "Vaga": ["Não","Sim","1 vaga","2 vagas","3 vagas"],
+        "Posição": ["Nascente","Poente","Vazado","Canto","Meio"],
+        "Andar": ["Baixo","Médio","Alto"],
+        "Status Atual": ["Ativo","Morno","Frio","Negociação","Proposta","Fechado","Perdido"],
+        "Potencial de Indicação": ["Alto","Médio","Baixo"],
+        "Tem Outro Imóvel?": ["Sim","Não"],
+        "Motivo Perda": ["Preço","Localização","Condição do imóvel","Financiamento","Desistiu","Comprou com outro corretor","Sem resposta"]
+      };
+
+      const DL_BIND = [
+        ["dlTipo","Tipo"],
+        ["dlOrigem","Origem"],
+        ["dlFormaPag","Forma de Pagamento"],
+        ["dlBanco","Banco"],
+        ["dlPrazo","Prazo de Compra"],
+        ["dlPerfil","Perfil (Moradia/Investimento)"],
+        ["dlRegiao","Região de Interesse"],
+        ["dlTipoImovel","Tipo de Imóvel"],
+        ["dlVaga","Vaga"],
+        ["dlPosicao","Posição"],
+        ["dlAndar","Andar"],
+        ["dlStatus","Status Atual"],
+        ["dlPotencial","Potencial de Indicação"],
+        ["dlOutroImovel","Tem Outro Imóvel?"],
+        ["dlMotivoPerda","Motivo Perda"]
+      ];
+
+      function fillDatalist(dlId, values){
+        const dl = document.getElementById(dlId);
+        if (!dl) return;
+        dl.innerHTML = "";
+        (values||[]).forEach(v=>{
+          const opt = document.createElement("option");
+          opt.value = v;
+          dl.appendChild(opt);
+        });
+      }
+
+      function mergeUnique(a,b){
+        const set = new Set();
+        (a||[]).forEach(x=>{ x=String(x||"").trim(); if(x) set.add(x); });
+        (b||[]).forEach(x=>{ x=String(x||"").trim(); if(x) set.add(x); });
+        return Array.from(set).sort((x,y)=>x.localeCompare(y));
+      }
+
+      function loadDatalists(){
+        // presets imediatos
+        DL_BIND.forEach(([dlId, col])=> fillDatalist(dlId, PRESETS[col] || []));
+
+        // mescla com valores do Sheets
+        const cols = DL_BIND.map(x=>x[1]);
+        google.script.run
+          .withSuccessHandler(function(map){
+            DL_BIND.forEach(([dlId, col])=>{
+              fillDatalist(dlId, mergeUnique(PRESETS[col] || [], (map && map[col]) ? map[col] : []));
+            });
+          })
+          .withFailureHandler(function(err){
+            console.log("Datalist error:", err);
+          })
+          .getDistinctValues(SHEET, cols);
+      }
+
+      // ====== LISTA: aponta para BC_listForPanel_v2 / BC_getById_v2 ======
+      function loadList(){
+        google.script.run
+          .withSuccessHandler(function(items){
+            renderList("list", items, function(it){
+              currentId = it.id;
+
+              google.script.run
+                .withSuccessHandler(function(obj){
+                  if (!obj) return toast("Registro não encontrado.");
+                  setFormFromObject("form", obj);
+                })
+                .withFailureHandler(function(err){
+                  toast("Erro ao carregar: " + (err.message || err));
+                })
+                .BC_getById_v2(it.id);
+            });
+
+            loadDatalists();
+          })
+          .withFailureHandler(function(err){
+            toast("Erro ao atualizar lista: " + (err.message || err));
+          })
+          .BC_listForPanel_v2();
+      }
+
+      function newRecord(){ currentId=null; clearForm("form"); }
+
+      function save(){
+        try{
+          const obj = formToObject("form");
+
+          // valida (datas obrigatórias)
+          validateDates(obj);
+
+          // salva via DataService (mantendo strings DD/MM/AAAA)
+          google.script.run
+            .withSuccessHandler(function(res){
+              toast("Salvo: " + res.action + " (ID " + res.id + ")");
+              currentId = res.id;
+              loadList();
+            })
+            .withFailureHandler(function(err){
+              toast("Erro ao salvar: " + (err.message || err));
+            })
+            .upsertById(SHEET, IDCOL, obj);
+
+        } catch(e){
+          toast(e.message || e);
+        }
+      }
+
+      function remove(){
+        const obj = formToObject("form");
+        const id = (obj[IDCOL] || currentId || "").toString().trim();
+        if (!id) return toast("Informe o ID para excluir.");
+        if (!confirm("Excluir ID " + id + "?")) return;
+
+        google.script.run
+          .withSuccessHandler(function(res){
+            toast(res.ok ? "Excluído." : ("Não excluído: " + res.message));
+            newRecord(); loadList();
+          })
+          .withFailureHandler(function(err){
+            toast("Erro ao excluir: " + (err.message || err));
+          })
+          .deleteById(SHEET, IDCOL, id);
+      }
+
+      // máscaras
+      maskDDMMYYYY(document.getElementById("Data Primeiro Contato"));
+      maskDDMMYYYY(document.getElementById("Último Contato"));
+      maskDDMMYYYY(document.getElementById("Próximo Follow-up"));
+      maskDDMM(document.getElementById("Data de Aniversário"));
+
+      loadList();
+    </script>
+  </body>
+</html>

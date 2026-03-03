@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <?!= include('Estilos'); ?>
+    <?!= include('JsBase'); ?>
+  </head>
+  <body>
+    <div class="topbar">
+      <div>
+        <div class="title">Agenda de Visitas</div>
+        <div class="sub">CRUD confiável • Cliente + Imóvel + Feedback + Próxima ação</div>
+      </div>
+      <div class="btns">
+        <button class="secondary" onclick="nav('Form_Menu')">← Menu</button>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h3>Registros</h3>
+        <div class="btns">
+          <button class="secondary" onclick="loadList()">Atualizar lista</button>
+          <button class="ok" onclick="newRecord()">+ Novo</button>
+        </div>
+        <div style="margin-top:10px" class="list" id="list"></div>
+        <div class="hint" style="margin-top:10px">
+          Clique em um registro para editar/excluir.
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Cadastro / Edição</h3>
+
+        <form id="form">
+          <div class="row">
+            <div>
+              <label>ID</label>
+              <input name="ID" placeholder="(automático se vazio)" />
+            </div>
+            <div>
+              <label>Telefone</label>
+              <input name="Telefone" id="Telefone" inputmode="numeric" placeholder="(opcional) só números" />
+            </div>
+          </div>
+
+          <div class="row">
+            <div>
+              <label>Data (DD/MM/AAAA)</label>
+              <input name="Data" id="Data" placeholder="DD/MM/AAAA" />
+            </div>
+            <div>
+              <label>Hora (HH:MM)</label>
+              <input name="Hora" id="Hora" placeholder="HH:MM" />
+            </div>
+          </div>
+
+          <label>Cliente (ID)</label>
+          <select name="Cliente" id="clienteSelect"></select>
+
+          <label>Imóvel (Código)</label>
+          <select name="Imóvel (Código)" id="imovelSelect"></select>
+
+          <div class="row">
+            <div>
+              <label>Quadra</label>
+              <input name="Quadra" placeholder="(opcional)" />
+            </div>
+            <div>
+              <label>(Livre)</label>
+              <input name="(Livre)" placeholder="campo extra opcional" />
+            </div>
+          </div>
+
+          <label>Feedback</label>
+          <textarea name="Feedback"></textarea>
+
+          <label>Próxima Ação</label>
+          <textarea name="Próxima Ação" placeholder="Ex: enviar proposta, agendar 2ª visita, buscar similar..."></textarea>
+        </form>
+
+        <div class="btns">
+          <button class="ok" onclick="save()">Salvar</button>
+          <button class="secondary" onclick="clearForm('form'); currentId=null;">Limpar</button>
+          <button class="danger" onclick="remove()">Excluir</button>
+        </div>
+
+        <div class="hint" style="margin-top:10px">
+          Observação: o script garante a coluna <b>ID</b> na planilha automaticamente.
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const SHEET = "Agenda_Visitas";
+      const IDCOL  = "ID";
+      let currentId = null;
+
+      // ===== máscaras / validação =====
+      function onlyDigits(s){ return String(s||"").replace(/\D/g,""); }
+
+      function maskDDMMYYYY(input){
+        if (!input) return;
+        input.addEventListener("input", ()=>{
+          const d = onlyDigits(input.value).slice(0,8);
+          let out = "";
+          out += d.slice(0,2);
+          if (d.length > 2) out += "/" + d.slice(2,4);
+          if (d.length > 4) out += "/" + d.slice(4,8);
+          input.value = out;
+        });
+      }
+
+      function maskHHMM(input){
+        if (!input) return;
+        input.addEventListener("input", ()=>{
+          const d = onlyDigits(input.value).slice(0,4);
+          let out = "";
+          out += d.slice(0,2);
+          if (d.length > 2) out += ":" + d.slice(2,4);
+          input.value = out;
+        });
+      }
+
+      function isValidDDMMYYYY(s){
+        if (!/^\d{2}\/\d{2}\/\d{4}$/.test(s)) return false;
+        const [dd,mm,yyyy] = s.split("/").map(Number);
+        if (yyyy < 1900 || yyyy > 2100) return false;
+        if (mm < 1 || mm > 12) return false;
+        const dt = new Date(yyyy, mm-1, dd);
+        return dt.getFullYear()===yyyy && (dt.getMonth()+1)===mm && dt.getDate()===dd;
+      }
+
+      function isValidHHMM(s){
+        if (!/^\d{2}:\d{2}$/.test(s)) return false;
+        const [hh,mm] = s.split(":").map(Number);
+        if (hh < 0 || hh > 23) return false;
+        if (mm < 0 || mm > 59) return false;
+        return true;
+      }
+
+      function loadSelects(){
+        google.script.run.withSuccessHandler(function(items){
+          const sel = byId("clienteSelect");
+          sel.innerHTML = `<option value="">Selecione...</option>`;
+          items.forEach(it=>{
+            const opt = document.createElement("option");
+            opt.value = it.id;
+            opt.textContent = it.label;
+            sel.appendChild(opt);
+          });
+        }).listClientesForSelect();
+
+        google.script.run.withSuccessHandler(function(items){
+          const sel = byId("imovelSelect");
+          sel.innerHTML = `<option value="">Selecione...</option>`;
+          items.forEach(it=>{
+            const opt = document.createElement("option");
+            opt.value = it.id;
+            opt.textContent = it.label;
+            sel.appendChild(opt);
+          });
+        }).listImoveisForSelect();
+      }
+
+      // ===== LISTA: usa AG_* =====
+      function loadList(){
+        google.script.run
+          .withSuccessHandler(function(items){
+            renderList("list", items, function(it){
+              currentId = it.id;
+              google.script.run
+                .withSuccessHandler(function(obj){
+                  if (!obj) return toast("Registro não encontrado.");
+                  setFormFromObject("form", obj);
+                  // mantém selects coerentes
+                  byId("clienteSelect").value = obj["Cliente"] || "";
+                  byId("imovelSelect").value = obj["Imóvel (Código)"] || "";
+                })
+                .withFailureHandler(function(err){
+                  toast("Erro ao carregar: " + (err.message || err));
+                })
+                .AG_getById_v2(it.id);
+            });
+          })
+          .withFailureHandler(function(err){
+            toast("Erro ao atualizar lista: " + (err.message || err));
+          })
+          .AG_listForPanel_v2();
+      }
+
+      function newRecord(){
+        currentId = null;
+        clearForm("form");
+        byId("clienteSelect").value = "";
+        byId("imovelSelect").value = "";
+      }
+
+      function save(){
+        try{
+          const obj = formToObject("form");
+
+          obj["Cliente"] = byId("clienteSelect").value || obj["Cliente"] || "";
+          obj["Imóvel (Código)"] = byId("imovelSelect").value || obj["Imóvel (Código)"] || "";
+
+          obj["Telefone"] = String(obj["Telefone"]||"").replace(/\D/g,"").trim();
+
+          const data = String(obj["Data"]||"").trim();
+          const hora = String(obj["Hora"]||"").trim();
+
+          if (!data || !hora || !obj["Cliente"] || !obj["Imóvel (Código)"]) {
+            return toast("Preencha Data, Hora, Cliente e Imóvel.");
+          }
+          if (!isValidDDMMYYYY(data)) return toast("Data inválida. Use DD/MM/AAAA.");
+          if (!isValidHHMM(hora)) return toast("Hora inválida. Use HH:MM.");
+
+          google.script.run
+            .withSuccessHandler(function(res){
+              toast("Salvo: " + res.action + " • ID " + res.id);
+              currentId = res.id;
+              obj[IDCOL] = res.id;
+              setFormFromObject("form", obj);
+              byId("clienteSelect").value = obj["Cliente"] || "";
+              byId("imovelSelect").value = obj["Imóvel (Código)"] || "";
+              loadList();
+            })
+            .withFailureHandler(function(err){
+              toast("Erro ao salvar: " + (err.message || err));
+            })
+            .upsertById(SHEET, IDCOL, obj);
+
+        } catch(e){
+          toast(e.message || e);
+        }
+      }
+
+      function remove(){
+        const obj = formToObject("form");
+        const id = (obj[IDCOL] || currentId || "").toString().trim();
+        if (!id) return toast("Informe o ID para excluir.");
+        if (!confirm("Excluir ID " + id + "?")) return;
+
+        google.script.run
+          .withSuccessHandler(function(res){
+            toast(res.ok ? "Excluído." : ("Não excluído: " + res.message));
+            newRecord();
+            loadList();
+          })
+          .withFailureHandler(function(err){
+            toast("Erro ao excluir: " + (err.message || err));
+          })
+          .deleteById(SHEET, IDCOL, id);
+      }
+
+      maskDDMMYYYY(document.getElementById("Data"));
+      maskHHMM(document.getElementById("Hora"));
+
+      loadSelects();
+      loadList();
+    </script>
+  </body>
+</html>

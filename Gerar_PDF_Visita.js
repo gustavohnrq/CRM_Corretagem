@@ -194,27 +194,19 @@ function _pdf_calcNotaMedia_(avaliacoes) {
 function _pdf_getBackgroundDataUrl_() {
   const BG_FOLDER_ID = "1fAzFGRc4KCnY2ou-jPhQ9hoiauQj0-Ce";
   const props = PropertiesService.getScriptProperties();
+  const DEFAULT_BG_FILE_ID = "1hz0s32GBLXxQfZcetfIMrCuQS4gKGHmI";
   const BG_FILE_ID_PROP = String(props.getProperty("PDF_VISITAS_BG_FILE_ID") || "").trim();
-  const SUPPORTED_MIME_TYPES = {
-    "image/png": true,
-    "image/jpeg": true,
-    "image/jpg": true,
-    "image/gif": true,
-    "image/webp": true
-  };
+  const BG_FILE_ID = BG_FILE_ID_PROP || DEFAULT_BG_FILE_ID;
 
-  const isSupportedMime_ = (mimeType) => {
-    const ct = String(mimeType || "").toLowerCase().trim();
-    return !!SUPPORTED_MIME_TYPES[ct];
-  };
+  const isImageMime_ = (mimeType) => String(mimeType || "").toLowerCase().trim().startsWith("image/");
 
   try {
     let chosen = null;
 
-    if (BG_FILE_ID_PROP) {
+    if (BG_FILE_ID) {
       try {
-        const byId = DriveApp.getFileById(BG_FILE_ID_PROP);
-        if (isSupportedMime_(byId.getMimeType())) chosen = byId;
+        const byId = DriveApp.getFileById(BG_FILE_ID);
+        if (isImageMime_(byId.getMimeType())) chosen = byId;
       } catch (e) {}
     }
 
@@ -225,7 +217,7 @@ function _pdf_getBackgroundDataUrl_() {
 
       while (it.hasNext()) {
         const f = it.next();
-        if (!isSupportedMime_(f.getMimeType())) continue;
+        if (!isImageMime_(f.getMimeType())) continue;
 
         const t = (f.getLastUpdated() || f.getDateCreated()).getTime();
         if (t > chosenTime) {
@@ -237,16 +229,18 @@ function _pdf_getBackgroundDataUrl_() {
 
     if (!chosen) return "";
 
-    const blob = chosen.getBlob();
-    const ct = String(blob.getContentType() || chosen.getMimeType() || "image/png").toLowerCase();
-    if (!isSupportedMime_(ct)) return "";
+    const originalBlob = chosen.getBlob();
+    if (!isImageMime_(originalBlob.getContentType()) && !isImageMime_(chosen.getMimeType())) return "";
 
-    const b64 = Utilities.base64Encode(blob.getBytes());
-    return `data:${ct};base64,${b64}`;
+    // Conversão para PNG melhora compatibilidade do renderer HTML->PDF do Apps Script.
+    const pngBlob = originalBlob.getAs("image/png");
+    const b64 = Utilities.base64Encode(pngBlob.getBytes());
+    return `data:image/png;base64,${b64}`;
   } catch (e) {
     return "";
   }
 }
+
 
 function _pdf_buildClientesPorVisita_() {
   const S = PDF_CFG.SHEETS;

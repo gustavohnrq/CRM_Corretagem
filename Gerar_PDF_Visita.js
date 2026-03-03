@@ -193,34 +193,54 @@ function _pdf_calcNotaMedia_(avaliacoes) {
 
 function _pdf_getBackgroundDataUrl_() {
   const BG_FOLDER_ID = "1fAzFGRc4KCnY2ou-jPhQ9hoiauQj0-Ce";
+  const props = PropertiesService.getScriptProperties();
+  const BG_FILE_ID_PROP = String(props.getProperty("PDF_VISITAS_BG_FILE_ID") || "").trim();
   const SUPPORTED_MIME_TYPES = {
     "image/png": true,
     "image/jpeg": true,
     "image/jpg": true,
-    "image/gif": true
+    "image/gif": true,
+    "image/webp": true
   };
+
+  const isSupportedMime_ = (mimeType) => {
+    const ct = String(mimeType || "").toLowerCase().trim();
+    return !!SUPPORTED_MIME_TYPES[ct];
+  };
+
   try {
-    const folder = DriveApp.getFolderById(BG_FOLDER_ID);
-    const it = folder.getFiles();
     let chosen = null;
-    let chosenTime = 0;
 
-    while (it.hasNext()) {
-      const f = it.next();
-      let ct = "";
-      try { ct = String(f.getMimeType() || "").toLowerCase(); } catch (e) { ct = ""; }
-      if (!SUPPORTED_MIME_TYPES[ct]) continue;
+    if (BG_FILE_ID_PROP) {
+      try {
+        const byId = DriveApp.getFileById(BG_FILE_ID_PROP);
+        if (isSupportedMime_(byId.getMimeType())) chosen = byId;
+      } catch (e) {}
+    }
 
-      const t = (f.getLastUpdated() || f.getDateCreated()).getTime();
-      if (t > chosenTime) {
-        chosen = f;
-        chosenTime = t;
+    if (!chosen) {
+      const folder = DriveApp.getFolderById(BG_FOLDER_ID);
+      const it = folder.getFiles();
+      let chosenTime = 0;
+
+      while (it.hasNext()) {
+        const f = it.next();
+        if (!isSupportedMime_(f.getMimeType())) continue;
+
+        const t = (f.getLastUpdated() || f.getDateCreated()).getTime();
+        if (t > chosenTime) {
+          chosen = f;
+          chosenTime = t;
+        }
       }
     }
 
     if (!chosen) return "";
+
     const blob = chosen.getBlob();
-    const ct = blob.getContentType() || "image/png";
+    const ct = String(blob.getContentType() || chosen.getMimeType() || "image/png").toLowerCase();
+    if (!isSupportedMime_(ct)) return "";
+
     const b64 = Utilities.base64Encode(blob.getBytes());
     return `data:${ct};base64,${b64}`;
   } catch (e) {

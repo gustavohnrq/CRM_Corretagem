@@ -24,6 +24,7 @@ const CFG = {
     "Form_RegistrarVisita": true,
     "Form_Proposta": true,
     "Form_Vendas": true,
+    "Form_PDFVisita": true,
     "Form_PDFVisitas": true
   }
 };
@@ -153,10 +154,22 @@ function parseAnyDate_(v) {
   return null;
 }
 
+
+function normalizePageName_(page) {
+  const raw = String(page || "").trim().replace(/^['"]+|['"]+$/g, "");
+  const aliases = {
+    "Form_PDFVisitas": "Form_PDFVisita",
+    "Form_Venda": "Form_Vendas",
+    "Form_Propostas": "Form_Proposta"
+  };
+  return aliases[raw] || raw;
+}
+
 function doGet(e) {
   ensureSchema_();
 
-  const page = (e && e.parameter && e.parameter.page) ? e.parameter.page : CFG.DEFAULT_PAGE;
+  const requested = (e && e.parameter && e.parameter.page) ? e.parameter.page : CFG.DEFAULT_PAGE;
+  const page = normalizePageName_(requested);
   const safePage = CFG.PAGES[page] ? page : CFG.DEFAULT_PAGE;
 
   return HtmlService

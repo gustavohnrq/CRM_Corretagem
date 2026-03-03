@@ -23,6 +23,7 @@ function getDashboardData(filters){
   const propostas = readSheetObjects_("Fato_Proposta");
   const vendas = readSheetObjects_("Fato_Venda");
   const captacoes = readSheetObjects_("Fato_Captacao");
+  const estoque = readSheetObjects_("Estoque_Imoveis");
 
   const weekly = calcWeeklyControl_(weekStart, weekEnd, {
     leadsCompradores, leadsVendedores, visitas, propostas, captacoes
@@ -45,6 +46,7 @@ function getDashboardData(filters){
     weekly,
     monthly,
     kpis: calcKpiCharts_(funilStart, funilEnd, { leadsCompradores, visitas, propostas, vendas, captacoes }),
+    kpisPortfolio: calcPortfolioKpis_(funilStart, funilEnd, { estoque, captacoes }),
     follow
   };
 }
@@ -193,6 +195,71 @@ function pctValue_(x){
 function numValue_(x){
   const n = Number(x||0);
   return (Math.round(n*100)/100).toString().replace('.', ',');
+}
+
+
+function calcPortfolioKpis_(start, endEx, data){
+  const estoque = data.estoque || [];
+  const captacoes = data.captacoes || [];
+
+  const estoqueAtivos = estoque.length;
+  const estoqueValorTotal = estoque.reduce((acc,r)=>acc + dsParseMoney_(pick_(r,["Valor","Preço","Preco"])),0);
+  const estoqueTicketMedio = estoqueAtivos>0 ? estoqueValorTotal/estoqueAtivos : 0;
+
+  const captacoesPeriodo = captacoes.filter(r=>dsInRange_(dsParseDateAny_(pick_(r,["DataCadastro","Data Cadastro"])), start, endEx));
+  const captacoesPeriodoQtd = captacoesPeriodo.length;
+  const captacoesCarteiraQtd = captacoes.length;
+  const captacoesTicketCarteira = captacoesCarteiraQtd>0 ? (captacoes.reduce((acc,r)=>acc + dsParseMoney_(pick_(r,["Valor"])),0) / captacoesCarteiraQtd) : 0;
+
+  const byBairroEstoque = groupByBairroCount_(estoque, ["Bairro"], ["Valor","Preço","Preco"]);
+  const byBairroCaptacoes = groupByBairroCount_(captacoes, ["Bairro"], ["Valor"]);
+
+  const top10BairrosCarosEstoque = groupByBairroAvg_(estoque, ["Bairro"], ["Valor","Preço","Preco"]).slice(0,10);
+
+  return {
+    cards:[
+      { key:"est1", title:"Estoque - Imóveis Ativos", value: String(estoqueAtivos), subtitle:"Total em carteira" },
+      { key:"est2", title:"Estoque - Valor Potencial", value: brlValue_(estoqueValorTotal), subtitle:"Soma do estoque" },
+      { key:"cap1", title:"Captações - No Período", value: String(captacoesPeriodoQtd), subtitle:"Dentro do filtro" },
+      { key:"cap2", title:"Captações - Carteira", value: String(captacoesCarteiraQtd), subtitle:"Total cadastrado" }
+    ],
+    bairroDivisao:{
+      estoque: byBairroEstoque,
+      captacoes: byBairroCaptacoes
+    },
+    topBairrosCarosEstoque: top10BairrosCarosEstoque,
+    ticketMedioCaptacoesCarteira: captacoesTicketCarteira,
+    ticketMedioEstoque: estoqueTicketMedio
+  };
+}
+
+function groupByBairroCount_(rows, bairroCandidates, valorCandidates){
+  const map = {};
+  (rows||[]).forEach(r=>{
+    const bairro = String(pick_(r, bairroCandidates) || "Sem bairro").trim() || "Sem bairro";
+    if (!map[bairro]) map[bairro] = { bairro, qtd:0, soma:0 };
+    map[bairro].qtd += 1;
+    map[bairro].soma += dsParseMoney_(pick_(r, valorCandidates));
+  });
+  return Object.values(map).sort((a,b)=>b.qtd-a.qtd).slice(0,10);
+}
+
+function groupByBairroAvg_(rows, bairroCandidates, valorCandidates){
+  const map = {};
+  (rows||[]).forEach(r=>{
+    const bairro = String(pick_(r, bairroCandidates) || "Sem bairro").trim() || "Sem bairro";
+    const v = dsParseMoney_(pick_(r, valorCandidates));
+    if (!v) return;
+    if (!map[bairro]) map[bairro] = { bairro, qtd:0, soma:0, avg:0 };
+    map[bairro].qtd += 1;
+    map[bairro].soma += v;
+  });
+  return Object.values(map).map(x=>({ ...x, avg: x.qtd>0 ? x.soma/x.qtd : 0 })).sort((a,b)=>b.avg-a.avg);
+}
+
+function brlValue_(n){
+  const v = Number(n||0);
+  return v.toLocaleString("pt-BR", { style:"currency", currency:"BRL" });
 }
 
 function readFollowUpBucketsByBoards_(){

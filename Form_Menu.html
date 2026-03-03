@@ -81,6 +81,31 @@
         </div>
 
         <div class="card" style="margin:0; grid-column: 1 / -1;">
+          <h3>KPIs de Estoque e Captações</h3>
+          <div class="grid" id="kpiPortfolioCards" style="grid-template-columns: repeat(4, 1fr); gap:10px;"></div>
+        </div>
+
+        <div class="grid" style="grid-template-columns: 1fr 1fr; gap:12px; grid-column: 1 / -1;">
+          <div class="card" style="margin:0;">
+            <h3>Divisão por Bairro (Estoque e Captações)</h3>
+            <div class="hint">Top bairros por quantidade</div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:8px;">
+              <div><div class="hint">Estoque</div><div class="list" id="bairroEstoque" style="max-height:220px;"></div></div>
+              <div><div class="hint">Captações</div><div class="list" id="bairroCaptacoes" style="max-height:220px;"></div></div>
+            </div>
+          </div>
+
+          <div class="card" style="margin:0;">
+            <h3>Tickets Médios</h3>
+            <div class="hint" id="ticketCarteiraCaptacao"></div>
+            <div class="card" style="margin:8px 0 0 0;">
+              <h3>Top 10 bairros mais caros (Estoque)</h3>
+              <div class="list" id="topBairrosCarosEstoque" style="max-height:220px;"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="margin:0; grid-column: 1 / -1;">
           <h3>Follow-up por Quadros</h3>
           <div class="hint" id="kpiFollow"></div>
           <div class="grid" style="grid-template-columns: repeat(5, 1fr); gap:10px;">
@@ -132,6 +157,7 @@
         });
 
         renderKpiCharts(d.kpis || []);
+        renderPortfolioKpis(d.kpisPortfolio || {});
 
         const boards = d.follow || {};
         renderFollowList("fuLeads", boards.leads ? [].concat(boards.leads.overdue||[], boards.leads.today||[], boards.leads.week||[]) : []);
@@ -168,6 +194,45 @@
           `;
           host.appendChild(card);
         });
+      }
+
+
+      function renderPortfolioKpis(data){
+        const cardsHost = byId("kpiPortfolioCards");
+        cardsHost.innerHTML = "";
+        (data.cards || []).forEach(c=>{
+          const card = document.createElement("div");
+          card.className = "card";
+          card.style.margin = "0";
+          card.innerHTML = `<div class="hint">${escapeHtml(c.title || "")}</div><div style="font-size:22px;font-weight:700;margin-top:6px;">${escapeHtml(c.value || "-")}</div><div class="hint" style="margin-top:4px;">${escapeHtml(c.subtitle || "")}</div>`;
+          cardsHost.appendChild(card);
+        });
+
+        renderSimpleList("bairroEstoque", (data.bairroDivisao && data.bairroDivisao.estoque) || [], x => `${x.bairro} • ${x.qtd}`);
+        renderSimpleList("bairroCaptacoes", (data.bairroDivisao && data.bairroDivisao.captacoes) || [], x => `${x.bairro} • ${x.qtd}`);
+
+        byId("ticketCarteiraCaptacao").innerHTML = `Ticket médio da carteira de captações: <b>${formatBRLNum(data.ticketMedioCaptacoesCarteira || 0)}</b>`;
+        renderSimpleList("topBairrosCarosEstoque", data.topBairrosCarosEstoque || [], x => `${x.bairro} • ${formatBRLNum(x.avg || 0)} (${x.qtd} imóveis)`);
+      }
+
+      function renderSimpleList(elId, arr, mapFn){
+        const el = byId(elId);
+        el.innerHTML = "";
+        if (!arr || !arr.length){
+          el.innerHTML = `<div class="hint">Sem dados.</div>`;
+          return;
+        }
+        arr.forEach(x=>{
+          const div = document.createElement("div");
+          div.className = "item";
+          div.innerHTML = `<small>${escapeHtml(mapFn(x))}</small>`;
+          el.appendChild(div);
+        });
+      }
+
+      function formatBRLNum(n){
+        const v = Number(n || 0);
+        return v.toLocaleString("pt-BR", { style:"currency", currency:"BRL" });
       }
 
       function renderFollowList(elId, arr){

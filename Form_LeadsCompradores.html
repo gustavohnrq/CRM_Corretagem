@@ -36,22 +36,26 @@
         <div class="row" style="margin-top:8px;">
           <div>
             <label>Filtro: Bairro</label>
-            <select id="fBairro"></select>
+            <input id="fBairro" list="dlFBairro" placeholder="(todos)" />
+            <datalist id="dlFBairro"></datalist>
           </div>
           <div>
             <label>Filtro: Tipo Imóvel</label>
-            <select id="fTipo"></select>
+            <input id="fTipo" list="dlFTipo" placeholder="(todos)" />
+            <datalist id="dlFTipo"></datalist>
           </div>
         </div>
 
         <div class="row">
           <div>
             <label>Filtro: Orçamento</label>
-            <select id="fOrc"></select>
+            <input id="fOrc" list="dlFOrc" placeholder="(todos)" />
+            <datalist id="dlFOrc"></datalist>
           </div>
           <div>
             <label>Filtro: Status</label>
-            <select id="fStatus"></select>
+            <input id="fStatus" list="dlFStatus" placeholder="(todos)" />
+            <datalist id="dlFStatus"></datalist>
           </div>
         </div>
 
@@ -254,24 +258,26 @@
           .getDistinctValues(SHEET, ["Status","Origem","Tipo Imóvel","Financiamento?","Bairro"]);
       }
 
-      // ===== filtros (dropdown) =====
-      function fillSelect(sel, items){
-        sel.innerHTML = `<option value="">(todos)</option>`;
+      // ===== filtros (input + datalist para permitir busca manual) =====
+      function fillFilterDatalist(dlId, items){
+        const dl = byId(dlId);
+        if (!dl) return;
+
+        dl.innerHTML = "";
         (items||[]).forEach(v=>{
           const opt = document.createElement("option");
           opt.value = v;
-          opt.textContent = v;
-          sel.appendChild(opt);
+          dl.appendChild(opt);
         });
       }
 
       function loadFilterOptions(){
         google.script.run
           .withSuccessHandler(function(res){
-            fillSelect(byId("fBairro"), (res && res.Bairro) || []);
-            fillSelect(byId("fTipo"), (res && res["Tipo Imóvel"]) || []);
-            fillSelect(byId("fOrc"), (res && res["Orçamento"]) || []);
-            fillSelect(byId("fStatus"), (res && res["Status"]) || []);
+            fillFilterDatalist("dlFBairro", (res && res.Bairro) || []);
+            fillFilterDatalist("dlFTipo", (res && res["Tipo Imóvel"]) || []);
+            fillFilterDatalist("dlFOrc", (res && res["Orçamento"]) || []);
+            fillFilterDatalist("dlFStatus", (res && res["Status"]) || []);
           })
           .withFailureHandler(function(err){
             console.log("Filtro options error:", err);

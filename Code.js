@@ -1635,13 +1635,32 @@ function PDF_getVisitaPayload_v1(idVisita) {
 
   const clientesMap = {};
   try {
-    const lista = DataService.listClientesForSelect() || [];
-    lista.forEach(it => { clientesMap[String(it.id).trim()] = it.label; });
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const shCli = ss.getSheetByName("Base_Clientes");
+    if (shCli) {
+      const lr = shCli.getLastRow();
+      const lc = shCli.getLastColumn();
+      if (lr >= 2 && lc >= 1) {
+        const headers = shCli.getRange(1, 1, 1, lc).getValues()[0];
+        const map = {};
+        headers.forEach((h, i) => { const k = _normHeader_(h); if (k) map[k] = i; });
+        const idxId = map["id"];
+        const idxNome = map[_normHeader_("Nome Completo")];
+        if (idxId !== undefined && idxNome !== undefined) {
+          shCli.getRange(2, 1, lr - 1, lc).getValues().forEach(r => {
+            const id = String(r[idxId] ?? "").trim();
+            if (!id) return;
+            const nome = String(r[idxNome] ?? "").trim();
+            clientesMap[id] = nome || id;
+          });
+        }
+      }
+    }
   } catch (e) {}
 
   avaliacoes = (avaliacoes || []).map(a => {
     const idc = String(a["Id_Cliente"] || "").trim();
-    return { ...a, Cliente_Nome: clientesMap[idc] || (idc ? ("Cliente " + idc) : "") };
+    return { ...a, Cliente_Nome: clientesMap[idc] || idc || "" };
   });
 
   const notasGerais = avaliacoes

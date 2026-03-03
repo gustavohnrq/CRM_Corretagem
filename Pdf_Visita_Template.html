@@ -19,6 +19,11 @@
       body{ font:12px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, "Helvetica Neue", sans-serif;
             color:var(--ink); background:var(--bg); padding: var(--page-padding); position: relative; }
 
+      .bgmark{
+        position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+        width:75%; height:auto; opacity:0.08; z-index:0; pointer-events:none;
+      }
+
       .wrapper{ position:relative; z-index:1; height:100%; }
       .content{ height:100%; padding-bottom: var(--footer-reserve); overflow:hidden; }
 
@@ -142,7 +147,26 @@
       };
       const respondents = (avs || []).map((a, i) => esc_(a.Cliente_Nome || a.CreatedBy || ('Avaliação #' + (i+1))));
       const compact = (avs || []).length > 1;
+
+      // =========================
+      // Dados fixos do corretor
+      // (edite aqui quando quiser)
+      // =========================
+      const CORRETOR_FIXO = {
+        nome: "",
+        telefone: "",
+        instagram: "",
+        descricao: ""
+      };
+
+      const BADGE_MEDIA = (mediaGeral!=null)
+        ? `<span class="badge">Média Geral: ${Number(mediaGeral).toFixed(2)}</span>`
+        : '';
+
+      const BG_IMG_URL = 'https://drive.google.com/uc?export=view&id=1hz0s32GBLXxQfZcetfIMrCuQS4gKGHmI';
     ?>
+
+    <img class="bgmark" src="<?= BG_IMG_URL ?>" alt="fundo" />
 
     <div class="wrapper">
       <div class="content">
@@ -164,13 +188,21 @@
               <p class="price"><strong>Valor:</strong> <?= valor || '<span class="muted">—</span>' ?></p>
             </div>
             <div>
-              <h2>Visita</h2>
-              <p><strong>Id_Visita:</strong> <?= visitaId ?></p>
-              <p><strong>Id_Agendamento:</strong> <?= esc_(d.id_agendamento || '-') ?></p>
-              <p><strong>Nota média:</strong> <?= (d.nota_media !== null && d.nota_media !== undefined) ? Number(d.nota_media).toFixed(2) : '-' ?></p>
-              <p><strong>Anexo ficha:</strong> <?= esc_(d.anexo_ficha_visita || '-') ?></p>
+              <h2>Corretor</h2>
+              <p><strong>Nome:</strong> <?= esc_(CORRETOR_FIXO.nome || '-') ?></p>
+              <p><strong>Telefone:</strong> <?= esc_(CORRETOR_FIXO.telefone || '-') ?></p>
+              <p><strong>Instagram:</strong> <?= esc_(CORRETOR_FIXO.instagram || '-') ?></p>
+              <p><strong>Descrição:</strong> <?= esc_(CORRETOR_FIXO.descricao || '-') ?></p>
             </div>
           </div>
+        </div>
+
+        <div class="card">
+          <h2>Visita</h2>
+          <p><strong>Id_Visita:</strong> <?= visitaId ?></p>
+          <p><strong>Id_Agendamento:</strong> <?= esc_(d.id_agendamento || '-') ?></p>
+          <p><strong>Nota média:</strong> <?= (d.nota_media !== null && d.nota_media !== undefined) ? Number(d.nota_media).toFixed(2) : '-' ?></p>
+          <p><strong>Anexo ficha:</strong> <?= esc_(d.anexo_ficha_visita || '-') ?></p>
         </div>
 
         <div class="card">
@@ -187,7 +219,7 @@
         </div>
 
         <div class="<?= compact ? 'card ratings ratings--compact' : 'card ratings' ?>">
-          <h2>Avaliações <?= mediaGeral!=null ? `<span class="badge">Média Geral: ${Number(mediaGeral).toFixed(2)}</span>` : '' ?></h2>
+          <h2>Avaliações <?!= BADGE_MEDIA ?></h2>
 
           <? if (!avs.length) { ?>
             <p><em>Sem avaliações registradas.</em></p>

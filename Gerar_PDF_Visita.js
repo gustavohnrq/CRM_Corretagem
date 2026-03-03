@@ -297,7 +297,7 @@ function PDF_getVisitaPayload_v1(idVisita) {
     const info = cliMap[idc] || null;
     return {
       ...a,
-      Cliente_Nome: info ? info.nome : ""
+      Cliente_Nome: info ? info.nome : (idc || "")
     };
   });
 

@@ -249,50 +249,60 @@ function ensureCaptacaoSchema_(){
  * - Se existir "id" OU "ID", não altera.
  * - Se não existir, cria e preenche ids sequenciais.
  */
-function ensureSchema_() {
+var __SCHEMA_ENSURED__ = false;
+
+function ensureSchema_(force) {
+  if (__SCHEMA_ENSURED__ && !force) return;
+
   if (typeof ensurePropostaVendaSchema_ === "function") {
     try { ensurePropostaVendaSchema_(); } catch (e) {}
   }
   try { ensureCaptacaoSchema_(); } catch(e) {}
 
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sh = ss.getSheetByName("Agenda_Visitas");
-  if (!sh) return;
-
-  const lc = sh.getLastColumn();
-  if (lc < 1) return;
-
-  const headers = sh.getRange(1, 1, 1, lc).getValues()[0].map(h => String(h || "").trim());
-  const hasIdLower = headers.includes("id");
-  const hasIdUpper = headers.includes("ID");
-  if (hasIdLower || hasIdUpper) return;
-
-  sh.insertColumnBefore(1);
-  sh.getRange(1, 1).setValue("id");
-  sh.getRange(1, 1, 1, sh.getLastColumn()).setFontWeight("bold");
-
-  const lr = sh.getLastRow();
-  if (lr >= 2) {
-    const idRange = sh.getRange(2, 1, lr - 1, 1);
-    const ids = idRange.getValues();
-    let next = 1;
-
-    for (let i = 0; i < ids.length; i++) {
-      if (!ids[i][0]) ids[i][0] = next++;
-      else {
-        const n = Number(ids[i][0]);
-        if (!isNaN(n) && isFinite(n)) next = Math.max(next, n + 1);
-      }
-    }
-    idRange.setValues(ids);
-  }
-
+  // colunas de apoio em abas relacionadas (independente de Agenda_Visitas existir)
   ensureColumnIfMissing_("Fato_Visitas", "Tipo_Visita");
   ensureColumnIfMissing_("Fato_Visitas", "Próximo Follow-up");
   ensureColumnIfMissing_("Fato_Proposta", "Próximo Follow-up");
   ensureColumnIfMissing_("Fato_Venda", "Próximo Follow-up");
   ensureColumnIfMissing_("Leads_Compradores", "Próximo Follow-up");
   ensureColumnIfMissing_("Leads_Vendedores", "Próximo Follow-up");
+
+  // ajuste específico de Agenda_Visitas: garantir coluna id na A
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sh = ss.getSheetByName("Agenda_Visitas");
+
+  if (sh) {
+    const lc = sh.getLastColumn();
+    if (lc >= 1) {
+      const headers = sh.getRange(1, 1, 1, lc).getValues()[0].map(h => String(h || "").trim());
+      const hasIdLower = headers.includes("id");
+      const hasIdUpper = headers.includes("ID");
+
+      if (!hasIdLower && !hasIdUpper) {
+        sh.insertColumnBefore(1);
+        sh.getRange(1, 1).setValue("id");
+        sh.getRange(1, 1, 1, sh.getLastColumn()).setFontWeight("bold");
+
+        const lr = sh.getLastRow();
+        if (lr >= 2) {
+          const idRange = sh.getRange(2, 1, lr - 1, 1);
+          const ids = idRange.getValues();
+          let next = 1;
+
+          for (let i = 0; i < ids.length; i++) {
+            if (!ids[i][0]) ids[i][0] = next++;
+            else {
+              const n = Number(ids[i][0]);
+              if (!isNaN(n) && isFinite(n)) next = Math.max(next, n + 1);
+            }
+          }
+          idRange.setValues(ids);
+        }
+      }
+    }
+  }
+
+  __SCHEMA_ENSURED__ = true;
 }
 
 /* ===============================

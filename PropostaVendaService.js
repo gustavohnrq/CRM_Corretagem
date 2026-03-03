@@ -43,26 +43,38 @@ function ensureSheetWithHeaders_(ss, sheetName, headers) {
 function PV_listVisitasForSelect_v1() {
   ensureSchema_();
 
-  if (typeof RV_ensureSchema_ === "function") {
-    try { RV_ensureSchema_(); } catch (e) {}
+  let rows = [];
+
+  if (typeof RV_listFatosForPanel_v2 === "function") {
+    try {
+      const fatos = RV_listFatosForPanel_v2() || [];
+      rows = fatos.map(f => ({
+        id: String(f.id || "").trim(),
+        raw: {
+          "Data_Visita": f.dataVisita || "",
+          "Id_Imovel": "",
+          "Id_Agendamento": ""
+        }
+      })).filter(r => r.id);
+    } catch (e) {
+      rows = [];
+    }
   }
 
-  let rows = [];
-  try {
-    rows = DataService.listRecords("Fato_Visitas", "Id_Visita", ["Data_Visita", "Id_Imovel", "Id_Agendamento"]);
-  } catch (e) {
-    return [];
+  if (!rows.length) {
+    try {
+      rows = DataService.listRecords("Fato_Visitas", "Id_Visita", ["Data_Visita", "Id_Imovel", "Id_Agendamento"]);
+    } catch (e) {
+      return [];
+    }
   }
 
   return rows.map(r => {
     let clientes = "-";
-    let endereco = "-";
 
     try {
       const ctx = PV_getVisitaContextById_v1(r.id);
       clientes = ctx && ctx.clientes_nomes && ctx.clientes_nomes.length ? ctx.clientes_nomes.join(", ") : "-";
-      const imovel = ctx && ctx.imovel ? ctx.imovel : {};
-      endereco = imovel["Endereço"] || imovel["Endereco"] || imovel["Quadra/Endereço"] || "-";
     } catch (e) {
       // fallback: mantém dropdown funcional mesmo sem contexto completo
     }
@@ -71,13 +83,11 @@ function PV_listVisitasForSelect_v1() {
       id: r.id,
       label: `Visita ${r.id} • ${r.raw["Data_Visita"] || "-"} • Imóvel ${r.raw["Id_Imovel"] || "-"} • ${clientes}`,
       enrich: {
-        idAgendamento: r.raw["Id_Agendamento"] || "",
-        endereco: endereco
+        idAgendamento: r.raw["Id_Agendamento"] || ""
       }
     };
   });
 }
-
 function PV_getVisitaContextById_v1(idVisita) {
   ensureSchema_();
   return PDF_getVisitaPayload_v1(idVisita);

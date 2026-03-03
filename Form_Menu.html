@@ -25,6 +25,7 @@
         <button type="button" onclick="nav('Form_RegistrarVisita')">🧾 Registrar Visita</button>
         <button type="button" onclick="nav('Form_Proposta')">💬 Registrar Proposta</button>
         <button type="button" onclick="nav('Form_Vendas')">💰 Registrar Venda</button>
+        <button type="button" onclick="nav('Form_Captacao')">📦 Registrar Captação</button>
         <button class="ok" onclick="nav('Form_PDFVisitas')">🧾 PDF Visitas</button>
         <button type="button" class="secondary" onclick="refreshDashboard()">🔄 Atualizar Painel</button>
       </div>
@@ -35,30 +36,23 @@
       <!-- DASHBOARD -->
       <div class="grid" style="grid-template-columns: 1fr 1fr; gap:12px;">
         <div class="card" style="margin:0;">
-          <h3>Controle Semanal (últimas 4 semanas)</h3>
+          <h3>Controle Semanal Estratégico</h3>
+          <div class="row">
+            <div><label>Semana (início)</label><input id="fSemanaIni" type="date" /></div>
+            <div><label>Semana (fim)</label><input id="fSemanaFim" type="date" /></div>
+          </div>
           <div class="hint" id="kpiSemanal"></div>
           <div style="margin-top:10px; overflow:auto;">
             <table style="width:100%; border-collapse:collapse; font-size:12px;">
-              <thead>
-                <tr>
-                  <th style="text-align:left; padding:8px; border-bottom:1px solid var(--line);">Semana</th>
-                  <th style="text-align:right; padding:8px; border-bottom:1px solid var(--line);">Ligações</th>
-                  <th style="text-align:right; padding:8px; border-bottom:1px solid var(--line);">Conversas</th>
-                  <th style="text-align:right; padding:8px; border-bottom:1px solid var(--line);">Visitas</th>
-                  <th style="text-align:right; padding:8px; border-bottom:1px solid var(--line);">Propostas</th>
-                  <th style="text-align:right; padding:8px; border-bottom:1px solid var(--line);">Vendas</th>
-                </tr>
-              </thead>
+              <thead><tr><th style="text-align:left; padding:8px; border-bottom:1px solid var(--line);">Meta</th><th style="text-align:right; padding:8px; border-bottom:1px solid var(--line);">Atual</th><th style="text-align:right; padding:8px; border-bottom:1px solid var(--line);">Meta</th></tr></thead>
               <tbody id="tblSemanal"></tbody>
             </table>
           </div>
-          <div class="btns" style="margin-top:10px;">
-            <button class="secondary" onclick="rebuild('weekly')">♻️ Recalcular Semanal</button>
-          </div>
+          <div class="btns" style="margin-top:10px;"><button class="secondary" onclick="refreshDashboard()">🔄 Atualizar período</button></div>
         </div>
 
         <div class="card" style="margin:0;">
-          <h3>Funil Mensal (mês atual)</h3>
+          <h3>Funil Mensal (cálculo em código)</h3>
           <div class="hint" id="kpiMensal"></div>
           <div style="margin-top:10px; overflow:auto;">
             <table style="width:100%; border-collapse:collapse; font-size:12px;">
@@ -73,30 +67,21 @@
             </table>
           </div>
           <div class="btns" style="margin-top:10px;">
-            <button class="secondary" onclick="rebuild('monthly')">♻️ Recalcular Mensal</button>
+            <button class="secondary" onclick="refreshDashboard()">♻️ Recalcular Mensal</button>
           </div>
         </div>
 
         <div class="card" style="margin:0; grid-column: 1 / -1;">
-          <h3>Follow-up</h3>
+          <h3>Follow-up por Quadros</h3>
           <div class="hint" id="kpiFollow"></div>
-
-          <div class="row" style="margin-top:10px;">
-            <div class="card" style="margin:0;">
-              <h3 style="margin-bottom:8px;">Vencidos</h3>
-              <div class="list" id="fuOverdue" style="max-height:240px;"></div>
-            </div>
-            <div class="card" style="margin:0;">
-              <h3 style="margin-bottom:8px;">Hoje</h3>
-              <div class="list" id="fuToday" style="max-height:240px;"></div>
-            </div>
+          <div class="grid" style="grid-template-columns: repeat(5, 1fr); gap:10px;">
+            <div class="card" style="margin:0;"><h3>Leads</h3><div class="list" id="fuLeads" style="max-height:220px;"></div></div>
+            <div class="card" style="margin:0;"><h3>Captações</h3><div class="list" id="fuCaptacoes" style="max-height:220px;"></div></div>
+            <div class="card" style="margin:0;"><h3>Visitas</h3><div class="list" id="fuVisitas" style="max-height:220px;"></div></div>
+            <div class="card" style="margin:0;"><h3>Propostas</h3><div class="list" id="fuPropostas" style="max-height:220px;"></div></div>
+            <div class="card" style="margin:0;"><h3>Vendas</h3><div class="list" id="fuVendas" style="max-height:220px;"></div></div>
           </div>
-
-          <div class="card" style="margin:10px 0 0 0;">
-            <h3 style="margin-bottom:8px;">Próximos 7 dias</h3>
-            <div class="list" id="fuWeek" style="max-height:240px;"></div>
-          </div>
-        </div>
+        </div></div>
       </div>
     </div>
 
@@ -113,66 +98,38 @@
         google.script.run
           .withSuccessHandler(renderDashboard)
           .withFailureHandler(err => toast("Erro no painel: " + (err.message || err)))
-          .getDashboardData();
+          .getDashboardData({ weekStart: byId("fSemanaIni")?.value || "", weekEnd: byId("fSemanaFim")?.value || "" });
       }
 
-      function rebuild(kind){
-        const fn = (kind === "weekly") ? "rebuildControleSemanal" : "rebuildFunilMensal";
-        google.script.run
-          .withSuccessHandler(() => refreshDashboard())
-          .withFailureHandler(err => toast("Erro ao recalcular: " + (err.message || err)))[fn]();
-      }
 
       function renderDashboard(d){
-        // KPIs
-        byId("kpiSemanal").innerHTML = `Total 4 semanas: <b>${nfmt(d.weeklyTotals.ligacoes)}</b> ligações • <b>${nfmt(d.weeklyTotals.visitas)}</b> visitas • <b>${nfmt(d.weeklyTotals.vendas)}</b> vendas`;
-        byId("kpiMensal").innerHTML = `Mês ${escapeHtml(d.monthKey)}: <b>${nfmt(d.monthly.funil.vendas)}</b> vendas • conv. Proposta→Venda: <b>${pct(d.monthly.rates.proposta_para_venda)}</b>`;
-        byId("kpiFollow").innerHTML = `Vencidos: <b>${d.follow.overdue.length}</b> • Hoje: <b>${d.follow.today.length}</b> • Próx. 7 dias: <b>${d.follow.week.length}</b>`;
+        byId("kpiSemanal").innerHTML = `Período semanal: <b>${escapeHtml(d.period.weekStart)}</b> até <b>${escapeHtml(d.period.weekEnd)}</b>`;
+        byId("kpiMensal").innerHTML = `Mês ${escapeHtml(d.period.monthKey)} • Vendas: <b>${nfmt(d.monthly.funil.vendas)}</b> • Captações: <b>${nfmt(d.monthly.funil.captacoes)}</b>`;
 
-        // Tabela semanal
-        const tb = byId("tblSemanal");
-        tb.innerHTML = "";
-        d.weeklyRows.forEach(r=>{
-          const tr = document.createElement("tr");
-          tr.innerHTML = `
-            <td style="padding:8px; border-bottom:1px solid rgba(34,49,85,.35)">${escapeHtml(r.semana)}</td>
-            <td style="padding:8px; text-align:right; border-bottom:1px solid rgba(34,49,85,.35)">${nfmt(r.ligacoes)}</td>
-            <td style="padding:8px; text-align:right; border-bottom:1px solid rgba(34,49,85,.35)">${nfmt(r.conversas)}</td>
-            <td style="padding:8px; text-align:right; border-bottom:1px solid rgba(34,49,85,.35)">${nfmt(r.visitas)}</td>
-            <td style="padding:8px; text-align:right; border-bottom:1px solid rgba(34,49,85,.35)">${nfmt(r.propostas)}</td>
-            <td style="padding:8px; text-align:right; border-bottom:1px solid rgba(34,49,85,.35)">${nfmt(r.vendas)}</td>
-          `;
+        const tb = byId("tblSemanal"); tb.innerHTML = "";
+        (d.weekly.rows || []).forEach(r=>{
+          const color = r.status === "green" ? "#37d67a" : (r.status === "yellow" ? "#ffd166" : "#ff5c73");
+          const tr=document.createElement("tr");
+          tr.innerHTML = `<td style="padding:8px; border-bottom:1px solid rgba(34,49,85,.35)">${escapeHtml(r.label)}</td><td style="padding:8px; text-align:right; border-bottom:1px solid rgba(34,49,85,.35); color:${color}; font-weight:700">${nfmt(r.atual)}</td><td style="padding:8px; text-align:right; border-bottom:1px solid rgba(34,49,85,.35)">${nfmt(r.min)}-${nfmt(r.max)}</td>`;
           tb.appendChild(tr);
         });
 
-        // Tabela funil mensal
-        const tf = byId("tblFunil");
-        tf.innerHTML = "";
-        const f = d.monthly.funil;
-        const rates = d.monthly.rates;
-
-        const rows = [
-          ["Leads", f.leads, null],
-          ["Contatos", f.contatos, rates.lead_para_contato],
-          ["Visitas", f.visitas, rates.contato_para_visita],
-          ["Propostas", f.propostas, rates.visita_para_proposta],
-          ["Vendas", f.vendas, rates.proposta_para_venda]
-        ];
-
-        rows.forEach(([name, qty, rate])=>{
-          const tr = document.createElement("tr");
-          tr.innerHTML = `
-            <td style="padding:8px; border-bottom:1px solid rgba(34,49,85,.35)">${escapeHtml(name)}</td>
-            <td style="padding:8px; text-align:right; border-bottom:1px solid rgba(34,49,85,.35)">${nfmt(qty)}</td>
-            <td style="padding:8px; text-align:right; border-bottom:1px solid rgba(34,49,85,.35)">${rate===null ? "-" : pct(rate)}</td>
-          `;
+        const tf = byId("tblFunil"); tf.innerHTML = "";
+        const f=d.monthly.funil, rates=d.monthly.rates;
+        [["Leads",f.leads,null],["Contatos",f.contatos,rates.lead_para_contato],["Visitas",f.visitas,rates.contato_para_visita],["Propostas",f.propostas,rates.visita_para_proposta],["Vendas",f.vendas,rates.proposta_para_venda],["Captações",f.captacoes,rates.lead_vendedor_para_captacao]].forEach(([name,qty,rate])=>{
+          const tr=document.createElement("tr");
+          tr.innerHTML=`<td style="padding:8px; border-bottom:1px solid rgba(34,49,85,.35)">${escapeHtml(name)}</td><td style="padding:8px; text-align:right; border-bottom:1px solid rgba(34,49,85,.35)">${nfmt(qty)}</td><td style="padding:8px; text-align:right; border-bottom:1px solid rgba(34,49,85,.35)">${rate===null?"-":pct(rate)}</td>`;
           tf.appendChild(tr);
         });
 
-        // Follow lists
-        renderFollowList("fuOverdue", d.follow.overdue);
-        renderFollowList("fuToday", d.follow.today);
-        renderFollowList("fuWeek", d.follow.week);
+        const boards = d.follow || {};
+        renderFollowList("fuLeads", boards.leads ? [].concat(boards.leads.overdue||[], boards.leads.today||[], boards.leads.week||[]) : []);
+        renderFollowList("fuCaptacoes", boards.captacoes ? [].concat(boards.captacoes.overdue||[], boards.captacoes.today||[], boards.captacoes.week||[]) : []);
+        renderFollowList("fuVisitas", boards.visitas ? [].concat(boards.visitas.overdue||[], boards.visitas.today||[], boards.visitas.week||[]) : []);
+        renderFollowList("fuPropostas", boards.propostas ? [].concat(boards.propostas.overdue||[], boards.propostas.today||[], boards.propostas.week||[]) : []);
+        renderFollowList("fuVendas", boards.vendas ? [].concat(boards.vendas.overdue||[], boards.vendas.today||[], boards.vendas.week||[]) : []);
+
+        byId("kpiFollow").innerHTML = "Acompanhamento por quadro (vencidos + hoje + próximos 7 dias).";
       }
 
       function renderFollowList(elId, arr){
@@ -191,6 +148,7 @@
         });
       }
 
+      (()=>{ const t=new Date(); const day=t.getDay(); const diff=(day===0?6:day-1); const monday=new Date(t.getTime()-diff*86400000); const sunday=new Date(monday.getTime()+6*86400000); const fmt=(d)=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; byId("fSemanaIni").value=fmt(monday); byId("fSemanaFim").value=fmt(sunday); })();
       refreshDashboard();
     </script>
   </body>

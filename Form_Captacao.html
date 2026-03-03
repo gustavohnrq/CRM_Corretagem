@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <?!= include('Estilos'); ?>
+    <?!= include('JsBase'); ?>
+    <style>
+      .grid70{display:grid;grid-template-columns:7fr 3fr;gap:14px;align-items:start}
+      @media (max-width:980px){.grid70{grid-template-columns:1fr}}
+    </style>
+  </head>
+  <body>
+    <div class="topbar">
+      <div><div class="title">Fato Captação</div><div class="sub">Cadastro de captações (modelo Estoque)</div></div>
+      <div class="btns"><button class="secondary" onclick="nav('Form_Menu')">← Menu</button></div>
+    </div>
+
+    <div class="grid70">
+      <div class="card">
+        <h3>Registros</h3>
+        <div class="btns">
+          <button class="secondary" onclick="loadList()">Atualizar</button>
+          <button class="ok" onclick="newRecord()">+ Novo</button>
+        </div>
+        <div class="list" id="list" style="margin-top:10px"></div>
+      </div>
+
+      <div class="card">
+        <h3>Cadastro / Edição</h3>
+        <form id="form">
+          <div class="row">
+            <div><label>Código</label><input name="Código" /></div>
+            <div><label>Captadores</label><input name="Captadores" /></div>
+          </div>
+          <label>Proprietario (obrigatório)</label>
+          <select name="Proprietario" id="Proprietario"></select>
+          <div class="row">
+            <div><label>Tipo</label><input name="Tipo" /></div>
+            <div><label>Quartos</label><input name="Quartos" /></div>
+          </div>
+          <div class="row">
+            <div><label>Valor</label><input name="Valor" id="Valor" /></div>
+            <div><label>Bairro</label><input name="Bairro" /></div>
+          </div>
+          <label>Endereco</label><input name="Endereco" />
+          <div class="row">
+            <div><label>PublicacaoNaInternet</label><input name="PublicacaoNaInternet" /></div>
+            <div><label>Exclusivo</label><input name="Exclusivo" /></div>
+          </div>
+          <div class="row">
+            <div><label>Próximo Follow-up</label><input name="Próximo Follow-up" id="ProxFU" placeholder="DD/MM/AAAA" /></div>
+            <div><label>DataCadastro</label><input name="DataCadastro" id="DataCadastro" placeholder="DD/MM/AAAA" /></div>
+          </div>
+          <label>Detalhes</label>
+          <textarea name="Detalhes" id="Detalhes"></textarea>
+        </form>
+
+        <div class="btns">
+          <button class="ok" onclick="save()">Salvar</button>
+          <button class="secondary" onclick="newRecord()">Limpar</button>
+          <button class="danger" onclick="removeRec()">Excluir</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const SHEET = "Fato_Captacao";
+      const IDCOL = "Código";
+      let currentId = null;
+      const DETALHES_BASE = `Situacao\nFinalidade\nLocalChave\nIdenticadorChave\nNomeQuadroChave\nNumeroLacreChave\nSituacaoChave\nNumeroChave\nNumeroControle\nConstrutora\nIdade\nHorarioVisita\nEmpreendimento\nCondominio\nAdministradora\nAdministradoraTelefone\nAdministradoraEmail\nSindico\nSindicoTelefone\nSindicoEmail\nNaPlanta\nPlaca\nValorCondominio\nValorIptu\nValorIptuAnual\nIndiceIptu\nRentabilidade\nTaxaAdministracao\nTaxaIntermediacao\nComissaoVenda\nCep\nEndereco\nEnderecoNumero\nComplemento\nBloco\nBairro\nBairro2\nCidade\nEstado\nRegiao\nPontoReferencia\nMelhorAcesso\nAreaLote\nAreaInterna\nAreaExterna\nZonaUso\nCoeficienteAprov\nAndar\nPisoAcabamento\nPosicaoImovel\nNumeroQuarto\nNumeroSala\nNumeroCopa\nNumeroBanheiro\nNumeroSuite\nNumeroVaranda\nArCondicionado\nAreaPrivativa\nAreaServico\nArmarioBanheiro\nArmarioCozinha\nArmarioQuarto\nBoxBanheiro\nCloset\nDce\nDespensa\nEscritorio\nLavabo\nMobiliado\nRouparia\nSolManha\nVistaMar\nNumeroVaga\nTipoVaga\nNumeroElevador\nNumeroTorres\nNumeroAndar\nNumeroUnidadesAndar\nTotalUnidades\nAguaIndividual\nAlarme\nAquecimentoEletrico\nAquecimentoGas\nAquecimentoSolar\nBoxDespejo\nCercaEletrica\nCircuitoTv\nGasCanalizado\nInterfone\nJardim\nLavanderia\nPortaoEletronico\nPortaria24H\nAcademia\nChurrasqueira\nHidromassagem\nHomeCinanema\nPiscina\nPlayground\nQuadraPoliesportiva\nQuadraTenis\nSalaMassagem\nSalaoFestas\nSalaoJogos\nSauna\nWifi\nUnidade\nCaptadores\nIndicadoPor\nDataCadastro\nDataVagoDesde\nDataEntrega\nDataVencimentoAutorizacao\nDataProximoEnvioAtualizacaoCadastro\nDataProximoEnvioIndicadores\nPadrao\nCartorio\nMatriculaCartorio\nLivroCartorio\nFolhaCartorio\nAguaIdentificador\nAguaMatricula\nAguaPadrao\nLuzNumeroCliente\nLuzNumeroInstalacao\nLuzPadrao\nQuantidadeFotos\nPublicacaoNaInternet\nDescricao\nAnotacoes\nExibirMeuSite\nPortalOlxBrasil\nPortalImovelWeb\nCasaMineira\nMercadoLivre\nFacebook\nChaveFacil\nLugarCerto\nChavesNaMao\nPontuacao\nEtiquetas`;
+
+      function onlyDigits(s){ return String(s||"").replace(/\D/g,""); }
+      function maskDDMMYYYY(input){ if (!input) return; input.addEventListener("input", ()=>{ const d=onlyDigits(input.value).slice(0,8); let out=d.slice(0,2); if(d.length>2) out+="/"+d.slice(2,4); if(d.length>4) out+="/"+d.slice(4,8); input.value=out;}); }
+
+      function loadProprietarios(){
+        google.script.run.withSuccessHandler(items=>{
+          const sel = byId("Proprietario");
+          sel.innerHTML = `<option value="">Selecione...</option>`;
+          (items||[]).forEach(it=>{
+            const op = document.createElement("option");
+            op.value = it.id;
+            op.textContent = it.label;
+            sel.appendChild(op);
+          });
+        }).listClientesForSelect();
+      }
+
+      function loadList(){
+        google.script.run.withSuccessHandler(items=>{
+          const el = byId("list"); el.innerHTML = "";
+          if (!items || !items.length){ el.innerHTML = `<div class="hint">Sem captações.</div>`; return; }
+          items.forEach(it=>{
+            const d=document.createElement("div"); d.className="item";
+            d.innerHTML = `<b>${escapeHtml(it.label || it.id)}</b><small>${escapeHtml(it.raw["Bairro"]||"-")} • ${escapeHtml(it.raw["Valor"]||"-")}</small>`;
+            d.onclick=()=>loadById(it.id);
+            el.appendChild(d);
+          });
+        }).listRecords(SHEET, IDCOL, ["Tipo","Bairro","Valor"]);
+      }
+
+      function loadById(id){
+        currentId = id;
+        google.script.run.withSuccessHandler(obj=>{
+          if(!obj) return toast("Registro não encontrado.");
+          setFormFromObject("form", obj);
+          byId("Proprietario").value = obj["Proprietario"] || "";
+        }).getById(SHEET, IDCOL, id);
+      }
+
+      function newRecord(){
+        currentId = null;
+        clearForm("form");
+        byId("Detalhes").value = DETALHES_BASE;
+      }
+
+      function save(){
+        const obj = formToObject("form");
+        obj["Proprietario"] = byId("Proprietario").value || obj["Proprietario"] || "";
+        if (!String(obj["Proprietario"]||"").trim()) return toast("Selecione o Proprietario.");
+        if (!String(obj["Detalhes"]||"").trim()) obj["Detalhes"] = DETALHES_BASE;
+        google.script.run.withSuccessHandler(res=>{ toast("Salvo: " + res.id); currentId = res.id; loadList(); }).upsertById(SHEET, IDCOL, obj);
+      }
+
+      function removeRec(){
+        const id = String(formToObject("form")[IDCOL] || currentId || "").trim();
+        if(!id) return toast("Informe Código para excluir.");
+        if(!confirm("Excluir " + id + "?")) return;
+        google.script.run.withSuccessHandler(()=>{ toast("Excluído."); newRecord(); loadList(); }).deleteById(SHEET, IDCOL, id);
+      }
+
+      maskDDMMYYYY(byId("ProxFU"));
+      maskDDMMYYYY(byId("DataCadastro"));
+      attachMoneyMask(byId("Valor"));
+      loadProprietarios();
+      loadList();
+      newRecord();
+    </script>
+  </body>
+</html>

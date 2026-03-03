@@ -71,6 +71,8 @@
               <input name="Data de Recebimento Comissão" id="Data_Recebimento_Comissao" placeholder="DD/MM/AAAA" />
             </div>
           </div>
+                  <label>Próximo Follow-up</label>
+          <input name="Próximo Follow-up" id="ProxFUVenda" placeholder="DD/MM/AAAA" />
         </form>
 
         <div class="btns">
@@ -238,6 +240,7 @@
 
       byId("Id_Proposta").addEventListener("change", onChangeProposta);
       maskDDMMYYYY(byId("Data"));
+      maskDDMMYYYY(byId("ProxFUVenda"));
       maskDDMMYYYY(byId("Data_Recebimento_Comissao"));
       attachMoneyMask(byId("Valor_Venda"));
       attachMoneyMask(byId("Comissão"));

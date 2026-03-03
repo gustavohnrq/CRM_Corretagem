@@ -69,6 +69,8 @@
             <option>Recusada</option>
             <option>Contraproposta</option>
           </select>
+                  <label>Próximo Follow-up</label>
+          <input name="Próximo Follow-up" id="ProxFUProposta" placeholder="DD/MM/AAAA" />
         </form>
 
         <div class="btns">
@@ -236,6 +238,7 @@
 
       byId("Id_Visita").addEventListener("change", onChangeVisita);
       maskDDMMYYYY(byId("Data"));
+      maskDDMMYYYY(byId("ProxFUProposta"));
       attachMoneyMask(byId("Valor_Proposta"));
       loadVisitas();
       loadList();

@@ -24,6 +24,7 @@ const CFG = {
     "Form_RegistrarVisita": true,
     "Form_Proposta": true,
     "Form_Vendas": true,
+    "Form_Captacao": true,
     "Form_PDFVisita": true,
     "Form_PDFVisitas": true
   }
@@ -213,6 +214,36 @@ function openWebApp_() {
   SpreadsheetApp.getUi().showModalDialog(html, "Abrir CRM Corretagem");
 }
 
+
+function ensureColumnIfMissing_(sheetName, colName) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sh = ss.getSheetByName(sheetName);
+  if (!sh) return;
+  const lc = sh.getLastColumn();
+  if (lc < 1) return;
+  const headers = sh.getRange(1,1,1,lc).getDisplayValues()[0].map(h=>String(h||"").trim());
+  if (headers.includes(colName)) return;
+  sh.getRange(1, lc+1).setValue(colName);
+  sh.getRange(1,1,1,lc+1).setFontWeight("bold");
+}
+
+function ensureCaptacaoSchema_(){
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sh = ss.getSheetByName("Fato_Captacao");
+  const headers = [
+    "Código","Captadores","Proprietario","Tipo","Quartos","Valor","Endereco","Bairro","PublicacaoNaInternet","Exclusivo","Detalhes","Próximo Follow-up","DataCadastro"
+  ];
+  if (!sh) sh = ss.insertSheet("Fato_Captacao");
+  const lc = sh.getLastColumn();
+  const current = lc>0 ? sh.getRange(1,1,1,lc).getDisplayValues()[0].map(h=>String(h||"").trim()) : [];
+  const eq = current.length===headers.length && headers.every((h,i)=>h===current[i]);
+  if (!eq){
+    sh.clear();
+    sh.getRange(1,1,1,headers.length).setValues([headers]);
+    sh.getRange(1,1,1,headers.length).setFontWeight("bold");
+  }
+}
+
 /**
  * ✅ Garante que a aba "Agenda_Visitas" tenha coluna "id" (minúsculo) na coluna A.
  * - Se existir "id" OU "ID", não altera.
@@ -222,6 +253,7 @@ function ensureSchema_() {
   if (typeof ensurePropostaVendaSchema_ === "function") {
     try { ensurePropostaVendaSchema_(); } catch (e) {}
   }
+  try { ensureCaptacaoSchema_(); } catch(e) {}
 
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sh = ss.getSheetByName("Agenda_Visitas");
@@ -254,6 +286,13 @@ function ensureSchema_() {
     }
     idRange.setValues(ids);
   }
+
+  ensureColumnIfMissing_("Fato_Visitas", "Tipo_Visita");
+  ensureColumnIfMissing_("Fato_Visitas", "Próximo Follow-up");
+  ensureColumnIfMissing_("Fato_Proposta", "Próximo Follow-up");
+  ensureColumnIfMissing_("Fato_Venda", "Próximo Follow-up");
+  ensureColumnIfMissing_("Leads_Compradores", "Próximo Follow-up");
+  ensureColumnIfMissing_("Leads_Vendedores", "Próximo Follow-up");
 }
 
 /* ===============================

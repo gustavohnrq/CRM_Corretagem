@@ -378,6 +378,74 @@ function BC_listForPanel_v2() {
 }
 
 /**
+ * Base_Clientes - lista para painel com filtros
+ * filtros suportados: "Prazo de Compra" e "Status Atual"
+ */
+function BC_listForPanelFiltered_v1(filters) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sh = ss.getSheetByName("Base_Clientes");
+  if (!sh) throw new Error('Aba "Base_Clientes" não existe.');
+
+  const lr = sh.getLastRow();
+  const lc = sh.getLastColumn();
+  if (lr < 2 || lc < 1) return [];
+
+  const headers = sh.getRange(1, 1, 1, lc).getValues()[0];
+  const normToIdx = {};
+  headers.forEach((h, i) => {
+    const key = _normHeader_(h);
+    if (key) normToIdx[key] = i;
+  });
+
+  const idxID = normToIdx["id"];
+  const idxNome = normToIdx[_normHeader_("Nome Completo")];
+  const idxTel = normToIdx[_normHeader_("Telefone")];
+  const idxEmail = normToIdx[_normHeader_("Email")];
+  const idxPrazo = normToIdx[_normHeader_("Prazo de Compra")];
+  const idxStatus = normToIdx[_normHeader_("Status Atual")];
+
+  if (idxID === undefined) throw new Error('Base_Clientes: coluna "ID" não encontrada (nem variação).');
+
+  const f = filters || {};
+  const fPrazo = String(f.prazoCompra || "").trim().toLowerCase();
+  const fStatus = String(f.statusAtual || "").trim().toLowerCase();
+
+  const data = sh.getRange(2, 1, lr - 1, lc).getValues();
+  const out = [];
+
+  data.forEach(r => {
+    const id = r[idxID];
+    if (id === "" || id === null || id === undefined) return;
+
+    const prazo = idxPrazo !== undefined ? String(r[idxPrazo] ?? "").trim() : "";
+    const status = idxStatus !== undefined ? String(r[idxStatus] ?? "").trim() : "";
+
+    if (fPrazo && prazo.toLowerCase() !== fPrazo) return;
+    if (fStatus && status.toLowerCase() !== fStatus) return;
+
+    const nome = idxNome !== undefined ? String(r[idxNome] ?? "").trim() : "";
+    let tel = idxTel !== undefined ? r[idxTel] : "";
+    const email = idxEmail !== undefined ? String(r[idxEmail] ?? "").trim() : "";
+
+    if (typeof tel === "number") tel = String(Math.trunc(tel));
+    tel = String(tel ?? "").trim();
+
+    out.push({
+      id: String(id).trim(),
+      label: [nome || "(sem nome)", tel || "(sem tel)", email || "(sem email)"].join(" • ")
+    });
+  });
+
+  out.sort((a, b) => {
+    const na = Number(a.id), nb = Number(b.id);
+    if (!isNaN(na) && !isNaN(nb)) return nb - na;
+    return String(b.id).localeCompare(String(a.id));
+  });
+
+  return out;
+}
+
+/**
  * ✅ Carrega Base_Clientes por ID (direto da planilha) e retorna objeto completo
  * - Formata datas (se forem Date) para DD/MM/AAAA
  * - Aniversário (se for Date) para DD/MM

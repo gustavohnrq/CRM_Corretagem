@@ -4,6 +4,17 @@
   <head>
     <?!= include('Estilos'); ?>
     <?!= include('JsBase'); ?>
+    <style>
+      .grid70{
+        display:grid;
+        grid-template-columns: 7fr 3fr;
+        gap: 14px;
+        align-items:start;
+      }
+      @media (max-width: 980px){
+        .grid70{ grid-template-columns: 1fr; }
+      }
+    </style>
   </head>
   <body>
     <div class="topbar">
@@ -16,13 +27,29 @@
       </div>
     </div>
 
-    <div class="grid">
+    <div class="grid70">
       <div class="card">
         <h3>Registros</h3>
         <div class="hint">Clique em um item para carregar no formulário.</div>
+
+        <div class="row" style="margin-top:8px;">
+          <div>
+            <label>Filtro: Prazo de Compra</label>
+            <input id="fPrazoCompra" list="dlFPrazoCompra" placeholder="(todos)" />
+            <datalist id="dlFPrazoCompra"></datalist>
+          </div>
+          <div>
+            <label>Filtro: Status Atual</label>
+            <input id="fStatusAtual" list="dlFStatusAtual" placeholder="(todos)" />
+            <datalist id="dlFStatusAtual"></datalist>
+          </div>
+        </div>
+
         <div class="btns">
-          <button class="secondary" onclick="loadList()">Atualizar lista</button>
+          <button class="secondary" onclick="applyFilters()">Aplicar filtros</button>
+          <button class="secondary" onclick="clearFilters()">Limpar filtros</button>
           <button class="ok" onclick="newRecord()">+ Novo</button>
+          <button class="secondary" onclick="reloadAll()">Atualizar</button>
         </div>
         <div style="margin-top:10px" class="list" id="list"></div>
       </div>
@@ -350,8 +377,52 @@
           .getDistinctValues(SHEET, cols);
       }
 
+      function fillFilterDatalist(dlId, values){
+        const dl = byId(dlId);
+        if (!dl) return;
+        dl.innerHTML = "";
+        (values || []).forEach(v=>{
+          const opt = document.createElement("option");
+          opt.value = v;
+          dl.appendChild(opt);
+        });
+      }
+
+      function loadFilterOptions(){
+        google.script.run
+          .withSuccessHandler(function(map){
+            fillFilterDatalist("dlFPrazoCompra", (map && map["Prazo de Compra"]) || []);
+            fillFilterDatalist("dlFStatusAtual", (map && map["Status Atual"]) || []);
+          })
+          .withFailureHandler(function(err){
+            console.log("Filter options error:", err);
+          })
+          .getDistinctValues(SHEET, ["Prazo de Compra", "Status Atual"]);
+      }
+
+      function currentFilters(){
+        return {
+          prazoCompra: String(byId("fPrazoCompra").value || "").trim(),
+          statusAtual: String(byId("fStatusAtual").value || "").trim()
+        };
+      }
+
+      function applyFilters(){ loadList(currentFilters()); }
+
+      function clearFilters(){
+        byId("fPrazoCompra").value = "";
+        byId("fStatusAtual").value = "";
+        loadList({});
+      }
+
+      function reloadAll(){
+        loadFilterOptions();
+        loadDatalists();
+        loadList(currentFilters());
+      }
+
       // ====== LISTA: aponta para BC_listForPanel_v2 / BC_getById_v2 ======
-      function loadList(){
+      function loadList(filters){
         google.script.run
           .withSuccessHandler(function(items){
             renderList("list", items, function(it){
@@ -367,13 +438,11 @@
                 })
                 .BC_getById_v2(it.id);
             });
-
-            loadDatalists();
           })
           .withFailureHandler(function(err){
             toast("Erro ao atualizar lista: " + (err.message || err));
           })
-          .BC_listForPanel_v2();
+          .BC_listForPanelFiltered_v1(filters || {});
       }
 
       function newRecord(){ currentId=null; clearForm("form"); }
@@ -390,7 +459,7 @@
             .withSuccessHandler(function(res){
               toast("Salvo: " + res.action + " (ID " + res.id + ")");
               currentId = res.id;
-              loadList();
+              loadList(currentFilters());
             })
             .withFailureHandler(function(err){
               toast("Erro ao salvar: " + (err.message || err));
@@ -411,7 +480,7 @@
         google.script.run
           .withSuccessHandler(function(res){
             toast(res.ok ? "Excluído." : ("Não excluído: " + res.message));
-            newRecord(); loadList();
+            newRecord(); loadList(currentFilters());
           })
           .withFailureHandler(function(err){
             toast("Erro ao excluir: " + (err.message || err));
@@ -425,7 +494,9 @@
       maskDDMMYYYY(document.getElementById("Próximo Follow-up"));
       maskDDMM(document.getElementById("Data de Aniversário"));
 
-      loadList();
+      loadFilterOptions();
+      loadDatalists();
+      loadList({});
     </script>
   </body>
 </html>

@@ -167,7 +167,7 @@
     ?>
 
     <? if (BG_IMG_URL) { ?>
-      <img class="bgmark" src="<?= BG_IMG_URL ?>" alt="fundo" />
+      <img class="bgmark" src="<?!= BG_IMG_URL ?>" alt="fundo" />
     <? } ?>
 
     <div class="wrapper">
@@ -199,13 +199,6 @@
           </div>
         </div>
 
-        <div class="card">
-          <h2>Visita</h2>
-          <p><strong>Id_Visita:</strong> <?= visitaId ?></p>
-          <p><strong>Id_Agendamento:</strong> <?= esc_(d.id_agendamento || '-') ?></p>
-          <p><strong>Nota média:</strong> <?= (d.nota_media !== null && d.nota_media !== undefined) ? Number(d.nota_media).toFixed(2) : '-' ?></p>
-          <p><strong>Anexo ficha:</strong> <?= esc_(d.anexo_ficha_visita || '-') ?></p>
-        </div>
 
         <div class="card">
           <h2>Clientes</h2>

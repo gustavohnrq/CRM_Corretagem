@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <?!= include('Estilos'); ?>
+    <?!= include('JsBase'); ?>
+  </head>
+  <body>
+    <div class="topbar">
+      <div>
+        <div class="title">Registrar Venda</div>
+        <div class="sub">Fato_Venda • vínculo obrigatório com proposta</div>
+      </div>
+      <div class="btns"><button class="secondary" onclick="nav('Form_Menu')">← Menu</button></div>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h3>Registros de Venda</h3>
+        <div class="btns">
+          <button class="secondary" onclick="loadList()">Atualizar</button>
+          <button class="ok" onclick="newRecord()">+ Novo</button>
+        </div>
+        <div class="list" id="list" style="margin-top:10px;"></div>
+      </div>
+
+      <div class="card">
+        <h3>Cadastro / Edição</h3>
+        <form id="form">
+          <label>Id_Proposta (obrigatório)</label>
+          <select name="Id_Proposta" id="Id_Proposta"></select>
+
+          <div class="card" style="margin:12px 0 0 0;">
+            <h3>Resumo Proposta + Visita</h3>
+            <div id="propostaCtx" class="hint">Selecione uma proposta para ver detalhes herdados.</div>
+          </div>
+
+          <div class="row">
+            <div>
+              <label>Data</label>
+              <input name="Data" id="Data" placeholder="DD/MM/AAAA" />
+            </div>
+            <div>
+              <label>Id_Venda (auto)</label>
+              <input name="Id_Venda" id="Id_Venda" readonly />
+            </div>
+          </div>
+
+          <div class="row">
+            <div>
+              <label>Valor da Venda</label>
+              <input name="Valor da Venda" id="Valor_Venda" />
+            </div>
+            <div>
+              <label>Forma de Pagamento</label>
+              <input name="Forma de Pagamento" placeholder="Ex: financiamento" />
+            </div>
+          </div>
+
+          <div class="row">
+            <div>
+              <label>Comissão</label>
+              <input name="Comissão" id="Comissão" />
+            </div>
+            <div>
+              <label>Data de Recebimento Comissão</label>
+              <input name="Data de Recebimento Comissão" id="Data_Recebimento_Comissao" placeholder="DD/MM/AAAA" />
+            </div>
+          </div>
+        </form>
+
+        <div class="btns">
+          <button class="ok" onclick="save()">Salvar Venda</button>
+          <button class="secondary" onclick="newRecord()">Limpar</button>
+          <button class="danger" onclick="removeRec()">Excluir</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      let currentId = null;
+
+      function onlyDigits(s){ return String(s||"").replace(/\D/g,""); }
+      function maskDDMMYYYY(input){
+        if (!input) return;
+        input.addEventListener("input", ()=>{
+          const d = onlyDigits(input.value).slice(0,8);
+          let out = d.slice(0,2);
+          if (d.length > 2) out += "/" + d.slice(2,4);
+          if (d.length > 4) out += "/" + d.slice(4,8);
+          input.value = out;
+        });
+      }
+
+      function renderPropostaCtx(ctx){
+        const el = byId("propostaCtx");
+        if (!ctx || !ctx.proposta) {
+          el.innerHTML = "Proposta não encontrada.";
+          return;
+        }
+
+        const p = ctx.proposta;
+        const v = ctx.visita || {};
+        const imv = v.imovel || {};
+        const end = imv["Endereço"] || imv["Endereco"] || imv["Quadra/Endereço"] || "-";
+        const clientes = (v.clientes_nomes || []).join(", ") || "-";
+
+        el.innerHTML = `
+          <div><b>Proposta:</b> ${escapeHtml(p["Id_Proposta"] || "-")} • <b>Status:</b> ${escapeHtml(p["status"] || "-")}</div>
+          <div><b>Valor Proposta:</b> ${escapeHtml(String(p["Valor da Proposta"] || "-"))} • <b>Modalidade:</b> ${escapeHtml(String(p["Modalidade de Pagamento"] || "-"))}</div>
+          <div><b>Visita:</b> ${escapeHtml(String(p["Id_Visita"] || "-"))} • <b>Data visita:</b> ${escapeHtml(v.data_visita || "-")}</div>
+          <div><b>Imóvel:</b> ${escapeHtml(v.id_imovel || "-")} • <b>Endereço:</b> ${escapeHtml(end)}</div>
+          <div><b>Clientes:</b> ${escapeHtml(clientes)}</div>
+        `;
+      }
+
+      function loadPropostas(){
+        google.script.run.withSuccessHandler(items => {
+          const sel = byId("Id_Proposta");
+          sel.innerHTML = `<option value="">Selecione...</option>`;
+          (items || []).forEach(it => {
+            const op = document.createElement("option");
+            op.value = it.id;
+            op.textContent = it.label;
+            sel.appendChild(op);
+          });
+        }).PV_listPropostasForSelect_v1();
+      }
+
+      function loadList(){
+        google.script.run.withSuccessHandler(items => {
+          const el = byId("list");
+          el.innerHTML = "";
+          if (!items || !items.length) {
+            el.innerHTML = `<div class="hint">Sem vendas.</div>`;
+            return;
+          }
+
+          items.forEach(it => {
+            const d = document.createElement("div");
+            d.className = "item";
+            d.innerHTML = `
+              <b>${escapeHtml(it.label)}</b>
+              <small>Visita ${escapeHtml(it.enrich.visitaId || "-")} • Proposta: ${escapeHtml(String(it.enrich.propostaValor || "-"))}</small>
+              <small>Clientes: ${escapeHtml(it.enrich.clientes || "-")} • ${escapeHtml(it.enrich.endereco || "-")}</small>
+            `;
+            d.onclick = () => loadById(it.id);
+            el.appendChild(d);
+          });
+        }).PV_listVendasDetailed_v1();
+      }
+
+      function loadById(id){
+        currentId = id;
+        google.script.run.withSuccessHandler(obj => {
+          if (!obj) return toast("Venda não encontrada.");
+          setFormFromObject("form", obj);
+          byId("Id_Venda").value = obj["Id_Venda"] || "";
+          byId("Id_Proposta").value = obj["Id_Proposta"] || "";
+          onChangeProposta();
+        }).PV_getVendaById_v1(id);
+      }
+
+      function onChangeProposta(){
+        const id = byId("Id_Proposta").value;
+        if (!id) {
+          byId("propostaCtx").innerHTML = "Selecione uma proposta para ver detalhes herdados.";
+          return;
+        }
+        google.script.run.withSuccessHandler(renderPropostaCtx).PV_getPropostaContextById_v1(id);
+      }
+
+      function newRecord(){
+        currentId = null;
+        clearForm("form");
+        byId("propostaCtx").innerHTML = "Selecione uma proposta para ver detalhes herdados.";
+        google.script.run.withSuccessHandler(id => { byId("Id_Venda").value = id; }).PV_getNextIdVenda_v1();
+      }
+
+      function save(){
+        try {
+          const obj = formToObject("form");
+          if (!String(obj["Id_Proposta"] || "").trim()) return toast("Selecione a proposta.");
+          google.script.run
+            .withSuccessHandler(res => {
+              toast("Venda salva: " + res.id);
+              currentId = res.id;
+              byId("Id_Venda").value = res.id;
+              loadList();
+            })
+            .withFailureHandler(err => toast("Erro ao salvar: " + (err.message || err)))
+            .PV_upsertVenda_v1(obj);
+        } catch (e) {
+          toast(e.message || e);
+        }
+      }
+
+      function removeRec(){
+        const id = String(byId("Id_Venda").value || currentId || "").trim();
+        if (!id) return toast("Sem Id_Venda para excluir.");
+        if (!confirm("Excluir venda " + id + "?")) return;
+        google.script.run.withSuccessHandler(()=>{ toast("Excluída."); newRecord(); loadList(); }).PV_deleteVendaById_v1(id);
+      }
+
+      byId("Id_Proposta").addEventListener("change", onChangeProposta);
+      maskDDMMYYYY(byId("Data"));
+      maskDDMMYYYY(byId("Data_Recebimento_Comissao"));
+      attachMoneyMask(byId("Valor_Venda"));
+      attachMoneyMask(byId("Comissão"));
+      loadPropostas();
+      loadList();
+      newRecord();
+    </script>
+  </body>
+</html>

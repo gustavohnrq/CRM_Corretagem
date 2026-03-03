@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <?!= include('Estilos'); ?>
+    <?!= include('JsBase'); ?>
+  </head>
+  <body>
+    <div class="topbar">
+      <div>
+        <div class="title">Registrar Proposta</div>
+        <div class="sub">Fato_Proposta • vínculo obrigatório com visita</div>
+      </div>
+      <div class="btns"><button class="secondary" onclick="nav('Form_Menu')">← Menu</button></div>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h3>Registros de Proposta</h3>
+        <div class="btns">
+          <button class="secondary" onclick="loadList()">Atualizar</button>
+          <button class="ok" onclick="newRecord()">+ Novo</button>
+        </div>
+        <div class="list" id="list" style="margin-top:10px;"></div>
+      </div>
+
+      <div class="card">
+        <h3>Cadastro / Edição</h3>
+        <form id="form">
+          <label>Id_Visita (obrigatório)</label>
+          <select name="Id_Visita" id="Id_Visita"></select>
+
+          <div class="card" style="margin:12px 0 0 0;">
+            <h3>Resumo da Visita vinculada</h3>
+            <div id="visitaCtx" class="hint">Selecione uma visita para ver detalhes.</div>
+          </div>
+
+          <div class="row">
+            <div>
+              <label>Data</label>
+              <input name="Data" id="Data" placeholder="DD/MM/AAAA" />
+            </div>
+            <div>
+              <label>Id_Proposta (auto)</label>
+              <input name="Id_Proposta" id="Id_Proposta" readonly />
+            </div>
+          </div>
+
+          <div class="row">
+            <div>
+              <label>Valor da Proposta</label>
+              <input name="Valor da Proposta" id="Valor_Proposta" />
+            </div>
+            <div>
+              <label>Modalidade de Pagamento</label>
+              <input name="Modalidade de Pagamento" placeholder="Ex: financiamento + FGTS" />
+            </div>
+          </div>
+
+          <label>Status</label>
+          <select name="status">
+            <option value="">Selecione...</option>
+            <option>Em análise</option>
+            <option>Aceita</option>
+            <option>Recusada</option>
+            <option>Contraproposta</option>
+          </select>
+        </form>
+
+        <div class="btns">
+          <button class="ok" onclick="save()">Salvar Proposta</button>
+          <button class="secondary" onclick="newRecord()">Limpar</button>
+          <button class="danger" onclick="removeRec()">Excluir</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      let currentId = null;
+
+      function onlyDigits(s){ return String(s||"").replace(/\D/g,""); }
+      function maskDDMMYYYY(input){
+        if (!input) return;
+        input.addEventListener("input", ()=>{
+          const d = onlyDigits(input.value).slice(0,8);
+          let out = d.slice(0,2);
+          if (d.length > 2) out += "/" + d.slice(2,4);
+          if (d.length > 4) out += "/" + d.slice(4,8);
+          input.value = out;
+        });
+      }
+
+      function renderVisitaCtx(ctx){
+        const el = byId("visitaCtx");
+        if (!ctx) {
+          el.innerHTML = "Visita não encontrada.";
+          return;
+        }
+
+        const imv = ctx.imovel || {};
+        const end = imv["Endereço"] || imv["Endereco"] || imv["Quadra/Endereço"] || "-";
+        const clientes = (ctx.clientes_nomes || []).join(", ") || "-";
+        el.innerHTML = `
+          <div><b>Visita:</b> ${escapeHtml(ctx.id_visita || "-")} • <b>Data:</b> ${escapeHtml(ctx.data_visita || "-")}</div>
+          <div><b>Imóvel:</b> ${escapeHtml(ctx.id_imovel || "-")} • <b>Endereço:</b> ${escapeHtml(end)}</div>
+          <div><b>Clientes:</b> ${escapeHtml(clientes)}</div>
+          <div><b>Nota média da visita:</b> ${ctx.nota_media == null ? "-" : Number(ctx.nota_media).toFixed(2)}</div>
+        `;
+      }
+
+      function loadVisitas(){
+        google.script.run.withSuccessHandler(items => {
+          const sel = byId("Id_Visita");
+          sel.innerHTML = `<option value="">Selecione...</option>`;
+          (items || []).forEach(it => {
+            const op = document.createElement("option");
+            op.value = it.id;
+            op.textContent = it.label;
+            sel.appendChild(op);
+          });
+        }).PV_listVisitasForSelect_v1();
+      }
+
+      function loadList(){
+        google.script.run.withSuccessHandler(items => {
+          const el = byId("list");
+          el.innerHTML = "";
+          if (!items || !items.length) {
+            el.innerHTML = `<div class="hint">Sem propostas.</div>`;
+            return;
+          }
+
+          items.forEach(it => {
+            const d = document.createElement("div");
+            d.className = "item";
+            d.innerHTML = `
+              <b>${escapeHtml(it.label)}</b>
+              <small>Visita ${escapeHtml(it.raw["Id_Visita"] || "-")} • Clientes: ${escapeHtml(it.enrich.clientes || "-")}</small>
+              <small>Imóvel ${escapeHtml(it.enrich.idImovel || "-")} • ${escapeHtml(it.enrich.endereco || "-")}</small>
+            `;
+            d.onclick = () => loadById(it.id);
+            el.appendChild(d);
+          });
+        }).PV_listPropostasDetailed_v1();
+      }
+
+      function loadById(id){
+        currentId = id;
+        google.script.run.withSuccessHandler(obj => {
+          if (!obj) return toast("Proposta não encontrada.");
+          setFormFromObject("form", obj);
+          byId("Id_Proposta").value = obj["Id_Proposta"] || "";
+          byId("Id_Visita").value = obj["Id_Visita"] || "";
+          onChangeVisita();
+        }).PV_getPropostaById_v1(id);
+      }
+
+      function onChangeVisita(){
+        const idVisita = byId("Id_Visita").value;
+        if (!idVisita) {
+          byId("visitaCtx").innerHTML = "Selecione uma visita para ver detalhes.";
+          return;
+        }
+        google.script.run.withSuccessHandler(renderVisitaCtx).PV_getVisitaContextById_v1(idVisita);
+      }
+
+      function newRecord(){
+        currentId = null;
+        clearForm("form");
+        byId("visitaCtx").innerHTML = "Selecione uma visita para ver detalhes.";
+        google.script.run.withSuccessHandler(id => { byId("Id_Proposta").value = id; }).PV_getNextIdProposta_v1();
+      }
+
+      function save(){
+        try {
+          const obj = formToObject("form");
+          if (!String(obj["Id_Visita"] || "").trim()) return toast("Selecione a visita.");
+          google.script.run
+            .withSuccessHandler(res => {
+              toast("Proposta salva: " + res.id);
+              currentId = res.id;
+              byId("Id_Proposta").value = res.id;
+              loadList();
+            })
+            .withFailureHandler(err => toast("Erro ao salvar: " + (err.message || err)))
+            .PV_upsertProposta_v1(obj);
+        } catch (e) {
+          toast(e.message || e);
+        }
+      }
+
+      function removeRec(){
+        const id = String(byId("Id_Proposta").value || currentId || "").trim();
+        if (!id) return toast("Sem Id_Proposta para excluir.");
+        if (!confirm("Excluir proposta " + id + "?")) return;
+        google.script.run.withSuccessHandler(()=>{ toast("Excluída."); newRecord(); loadList(); }).PV_deletePropostaById_v1(id);
+      }
+
+      byId("Id_Visita").addEventListener("change", onChangeVisita);
+      maskDDMMYYYY(byId("Data"));
+      attachMoneyMask(byId("Valor_Proposta"));
+      loadVisitas();
+      loadList();
+      newRecord();
+    </script>
+  </body>
+</html>

@@ -22,6 +22,8 @@ const CFG = {
     "Form_LeadsVendedores": true,
     "Form_AgendarVisita": true,
     "Form_RegistrarVisita": true,
+    "Form_Proposta": true,
+    "Form_Vendas": true,
     "Form_PDFVisitas": true
   }
 };
@@ -204,6 +206,10 @@ function openWebApp_() {
  * - Se não existir, cria e preenche ids sequenciais.
  */
 function ensureSchema_() {
+  if (typeof ensurePropostaVendaSchema_ === "function") {
+    try { ensurePropostaVendaSchema_(); } catch (e) {}
+  }
+
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sh = ss.getSheetByName("Agenda_Visitas");
   if (!sh) return;

@@ -43,50 +43,26 @@ function ensureSheetWithHeaders_(ss, sheetName, headers) {
 function PV_listVisitasForSelect_v1() {
   ensureSchema_();
 
-  let rows = [];
-
-  if (typeof RV_listFatosForPanel_v2 === "function") {
+  // Mesmo mecanismo do módulo de PDF:
+  // - base em Fato_Visitas
+  // - clientes derivados de Fato_Avaliacao + Base_Clientes
+  // - ordenação por Id_Visita desc
+  if (typeof PDF_listVisitasForSelect_v1 === "function") {
     try {
-      const fatos = RV_listFatosForPanel_v2() || [];
-      rows = fatos.map(f => ({
-        id: String(f.id || "").trim(),
-        raw: {
-          "Data_Visita": f.dataVisita || "",
-          "Id_Imovel": "",
-          "Id_Agendamento": ""
-        }
-      })).filter(r => r.id);
+      return PDF_listVisitasForSelect_v1();
     } catch (e) {
-      rows = [];
+      // fallback abaixo
     }
   }
 
-  if (!rows.length) {
-    try {
-      rows = DataService.listRecords("Fato_Visitas", "Id_Visita", ["Data_Visita", "Id_Imovel", "Id_Agendamento"]);
-    } catch (e) {
-      return [];
-    }
+  // fallback defensivo (não deve ser o caminho principal)
+  try {
+    return DataService
+      .listRecords("Fato_Visitas", "Id_Visita", ["Data_Visita", "Id_Imovel"])
+      .map(r => ({ id: r.id, label: r.label || (`Visita ${r.id}`) }));
+  } catch (e) {
+    return [];
   }
-
-  return rows.map(r => {
-    let clientes = "-";
-
-    try {
-      const ctx = PV_getVisitaContextById_v1(r.id);
-      clientes = ctx && ctx.clientes_nomes && ctx.clientes_nomes.length ? ctx.clientes_nomes.join(", ") : "-";
-    } catch (e) {
-      // fallback: mantém dropdown funcional mesmo sem contexto completo
-    }
-
-    return {
-      id: r.id,
-      label: `Visita ${r.id} • ${r.raw["Data_Visita"] || "-"} • Imóvel ${r.raw["Id_Imovel"] || "-"} • ${clientes}`,
-      enrich: {
-        idAgendamento: r.raw["Id_Agendamento"] || ""
-      }
-    };
-  });
 }
 function PV_getVisitaContextById_v1(idVisita) {
   ensureSchema_();

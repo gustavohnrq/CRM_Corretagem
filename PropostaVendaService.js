@@ -205,7 +205,13 @@ function PV_getNextIdProposta_v1() {
 function PV_upsertProposta_v1(obj) {
   ensureSchema_();
   if (!String(obj["Id_Visita"] || "").trim()) throw new Error("Id_Visita é obrigatório.");
-  return DataService.upsertById("Fato_Proposta", "Id_Proposta", obj);
+  const res = DataService.upsertById("Fato_Proposta", "Id_Proposta", obj);
+  try {
+    if (typeof FU_syncFollowUpForRecord_ === "function") {
+      FU_syncFollowUpForRecord_("Fato_Proposta", "Id_Proposta", (res && res.id) || obj["Id_Proposta"], obj);
+    }
+  } catch (e) {}
+  return res;
 }
 
 function PV_deletePropostaById_v1(idProposta) {
@@ -294,7 +300,13 @@ function PV_getNextIdVenda_v1() {
 function PV_upsertVenda_v1(obj) {
   ensureSchema_();
   if (!String(obj["Id_Proposta"] || "").trim()) throw new Error("Id_Proposta é obrigatório.");
-  return DataService.upsertById("Fato_Venda", "Id_Venda", obj);
+  const res = DataService.upsertById("Fato_Venda", "Id_Venda", obj);
+  try {
+    if (typeof FU_syncFollowUpForRecord_ === "function") {
+      FU_syncFollowUpForRecord_("Fato_Venda", "Id_Venda", (res && res.id) || obj["Id_Venda"], obj);
+    }
+  } catch (e) {}
+  return res;
 }
 
 function PV_deleteVendaById_v1(idVenda) {

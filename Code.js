@@ -302,7 +302,16 @@ function ensureSchema_() {
 function getMeta(sheetName) { return DataService.getMeta(sheetName); }
 function listRecords(sheetName, idCol, labelCols) { return DataService.listRecords(sheetName, idCol, labelCols); }
 function getById(sheetName, idCol, idVal) { return DataService.getById(sheetName, idCol, idVal); }
-function upsertById(sheetName, idCol, obj) { return DataService.upsertById(sheetName, idCol, obj); }
+function upsertById(sheetName, idCol, obj) {
+  const res = DataService.upsertById(sheetName, idCol, obj);
+  try {
+    if (typeof FU_syncFollowUpForRecord_ === "function") {
+      const idVal = String((res && res.id) || obj[idCol] || "").trim();
+      FU_syncFollowUpForRecord_(sheetName, idCol, idVal, obj);
+    }
+  } catch (e) {}
+  return res;
+}
 function deleteById(sheetName, idCol, idVal) { return DataService.deleteById(sheetName, idCol, idVal); }
 function getNextNumericId(sheetName, idCol) { return DataService.getNextNumericId(sheetName, idCol); }
 function listClientesForSelect() { return DataService.listClientesForSelect(); }
@@ -1539,13 +1548,22 @@ function RV_upsertFatoVisita_v2(obj) {
   // garante Id_Visita gravado
   writeRow[idxIdVis] = idv;
 
+  let result;
   if (rowIndex === -1) {
     sh.appendRow(writeRow);
-    return { ok: true, action: "created", id: idv };
+    result = { ok: true, action: "created", id: idv };
   } else {
     sh.getRange(rowIndex, 1, 1, lc).setValues([writeRow]);
-    return { ok: true, action: "updated", id: idv };
+    result = { ok: true, action: "updated", id: idv };
   }
+
+  try {
+    if (typeof FU_syncFollowUpForRecord_ === "function") {
+      FU_syncFollowUpForRecord_("Fato_Visitas", "Id_Visita", idv, obj);
+    }
+  } catch (e) {}
+
+  return result;
 }
 
 // ======================================================

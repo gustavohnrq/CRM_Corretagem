@@ -1254,6 +1254,105 @@ function RV_listFatosForPanel_v2() {
   const idxIdVis = normToIdx["id_visita"];
   const idxData  = normToIdx[_normHeader_("Data_Visita")];
   const idxImv   = normToIdx[_normHeader_("Id_Imovel")];
+  const idxProp  = normToIdx[_normHeader_("Proposta")];
+  if (idxIdVis === undefined) throw new Error('Fato_Visitas: coluna "Id_Visita" não encontrada.');
+
+  const parseNum_ = (v) => {
+    if (typeof v === "number") return isFinite(v) ? v : null;
+    const s = String(v ?? "").trim();
+    if (!s) return null;
+    const raw = s.replace(/[R$\s]/g, "");
+    let n = NaN;
+    if (raw.includes(",")) {
+      n = Number(raw.replace(/\./g, "").replace(",", "."));
+    } else {
+      n = Number(raw);
+    }
+    return isNaN(n) ? null : n;
+  };
+
+  const clientesMap = {};
+  try {
+    const shCli = ss.getSheetByName("Base_Clientes");
+    if (shCli) {
+      const lrCli = shCli.getLastRow();
+      const lcCli = shCli.getLastColumn();
+      if (lrCli >= 2 && lcCli >= 1) {
+        const hCli = shCli.getRange(1, 1, 1, lcCli).getValues()[0];
+        const mCli = {};
+        hCli.forEach((h, i) => {
+          const k = _normHeader_(h);
+          if (k) mCli[k] = i;
+        });
+        const idxCliId = mCli["id"];
+        const idxCliNome = mCli[_normHeader_("Nome Completo")];
+        if (idxCliId !== undefined && idxCliNome !== undefined) {
+          const dCli = shCli.getRange(2, 1, lrCli - 1, lcCli).getValues();
+          dCli.forEach(r => {
+            const id = String(r[idxCliId] ?? "").trim();
+            const nome = String(r[idxCliNome] ?? "").trim();
+            if (id) clientesMap[id] = nome || ("Cliente " + id);
+          });
+        }
+      }
+    }
+  } catch (e) {}
+
+  const aggByVisita = {};
+  try {
+    const shAv = ss.getSheetByName("Fato_Avaliacao");
+    if (shAv) {
+      const lrAv = shAv.getLastRow();
+      const lcAv = shAv.getLastColumn();
+      if (lrAv >= 2 && lcAv >= 1) {
+        const hAv = shAv.getRange(1, 1, 1, lcAv).getValues()[0];
+        const mAv = {};
+        hAv.forEach((h, i) => {
+          const k = _normHeader_(h);
+          if (k) mAv[k] = i;
+        });
+
+        const idxAvVis = mAv[_normHeader_("Id_Visita")];
+        const idxAvCli = mAv[_normHeader_("Id_Cliente")];
+        const idxAvNota = mAv[_normHeader_("Nota_Geral")];
+        const idxAvPreco = mAv[_normHeader_("Preco_N10")];
+
+        if (idxAvVis !== undefined) {
+          const dAv = shAv.getRange(2, 1, lrAv - 1, lcAv).getValues();
+          dAv.forEach(r => {
+            const idv = String(r[idxAvVis] ?? "").trim();
+            if (!idv) return;
+
+            if (!aggByVisita[idv]) {
+              aggByVisita[idv] = {
+                clientes: new Set(),
+                sumNota: 0,
+                cntNota: 0,
+                sumPreco: 0,
+                cntPreco: 0
+              };
+            }
+            const a = aggByVisita[idv];
+
+            if (idxAvCli !== undefined) {
+              const idc = String(r[idxAvCli] ?? "").trim();
+              if (idc) a.clientes.add(idc);
+            }
+
+            if (idxAvNota !== undefined) {
+              const n = parseNum_(r[idxAvNota]);
+              if (n !== null) { a.sumNota += n; a.cntNota++; }
+            }
+
+            if (idxAvPreco !== undefined) {
+              const p = parseNum_(r[idxAvPreco]);
+              if (p !== null) { a.sumPreco += p; a.cntPreco++; }
+            }
+          });
+        }
+      }
+    }
+  } catch (e) {}
 
   const range = sh.getRange(2, 1, lr - 1, lc);
   const values = range.getValues();
@@ -1264,11 +1363,29 @@ function RV_listFatosForPanel_v2() {
     const idv = values[i][idxIdVis];
     if (idv === "" || idv === null || idv === undefined) continue;
 
+    const idVisita = String(idv).trim();
     const d  = idxData !== undefined ? String(disp[i][idxData] ?? "").trim() : "";
     const im = idxImv  !== undefined ? String(values[i][idxImv] ?? "").trim() : "";
+    const proposta = idxProp !== undefined ? String(values[i][idxProp] ?? "").trim() : "";
 
-    const label = `Imóvel ${im || "-"} • ${d || "(sem data)"}`;
-    out.push({ id: String(idv).trim(), label });
+    const agg = aggByVisita[idVisita] || null;
+    const clientes = agg
+      ? Array.from(agg.clientes).map(idc => clientesMap[idc] || ("Cliente " + idc))
+      : [];
+
+    const mediaNotaGeral = (agg && agg.cntNota > 0) ? (agg.sumNota / agg.cntNota) : null;
+    const mediaPrecoN10 = (agg && agg.cntPreco > 0) ? (agg.sumPreco / agg.cntPreco) : null;
+
+    const label = `Data ${d || "(sem data)"} • Imóvel ${im || "-"}`;
+    out.push({
+      id: idVisita,
+      label,
+      dataVisita: d,
+      proposta,
+      clientes,
+      mediaNotaGeral,
+      mediaPrecoN10
+    });
   }
 
   out.sort((a, b) => Number(b.id) - Number(a.id));

@@ -322,7 +322,7 @@
                 .withFailureHandler(function(err){
                   toast("Erro ao carregar: " + (err.message || err));
                 })
-                .getById(SHEET, IDCOL, it.id);
+                .LC_getById_v2(it.id);
             });
           })
           .withFailureHandler(function(err){

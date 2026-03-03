@@ -523,17 +523,23 @@ function LC_getById_v2(telefoneVal) {
   if (idxTel === undefined) throw new Error('Leads_Compradores: coluna "Telefone" não encontrada.');
 
   const data = sh.getRange(2, 1, lr - 1, lc).getValues();
-  const target = String(telefoneVal ?? "").trim();
+
+  const normalizePhoneKey_ = (v) => {
+    let raw = v;
+    if (typeof raw === "number") raw = String(Math.trunc(raw));
+    raw = String(raw ?? "").trim();
+    const digits = raw.replace(/\D/g, "");
+    return digits || raw;
+  };
+
+  const target = normalizePhoneKey_(telefoneVal);
 
   const isDateObj = (v) => Object.prototype.toString.call(v) === "[object Date]" && !isNaN(v.getTime());
   const pad2 = (n) => String(n).padStart(2, "0");
   const fmtDDMMYYYY = (d) => `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)}/${d.getFullYear()}`;
 
   for (const r of data) {
-    let tel = r[idxTel];
-    if (typeof tel === "number") tel = String(Math.trunc(tel));
-    tel = String(tel ?? "").trim();
-
+    const tel = normalizePhoneKey_(r[idxTel]);
     if (tel !== target) continue;
 
     const obj = {};
@@ -544,7 +550,9 @@ function LC_getById_v2(telefoneVal) {
       let v = r[i];
 
       // telefone number -> string
-      if (_normHeader_(keyRaw) === "telefone" && typeof v === "number") v = String(Math.trunc(v));
+      if (_normHeader_(keyRaw) === "telefone") {
+        v = normalizePhoneKey_(v);
+      }
 
       // campos de data -> DD/MM/AAAA se vier Date
       const k = _normHeader_(keyRaw);
@@ -1865,4 +1873,3 @@ function LC_listForPanelFiltered_v4(filters) {
   out.sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
   return out;
 }
-

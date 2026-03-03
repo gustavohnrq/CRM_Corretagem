@@ -46,21 +46,21 @@ const PDF_CFG = {
 ========================= */
 function PDF_getFolderId_() {
   const props = PropertiesService.getScriptProperties();
-  const folderId = String(props.getProperty("PDF_VISITAS_FOLDER_ID") || "").trim();
-
-  if (!folderId) {
-    throw new Error(
-      'Defina a propriedade "PDF_VISITAS_FOLDER_ID" com o ID de uma pasta do Drive (já existente).'
-    );
-  }
+  const FALLBACK_FOLDER_ID = "1NfMPgTO6L_qSxFC3qn4CV9CIovNOJuls";
+  const folderIdProp = String(props.getProperty("PDF_VISITAS_FOLDER_ID") || "").trim();
+  const folderId = folderIdProp || FALLBACK_FOLDER_ID;
 
   // valida se a pasta existe (isso já exige Drive scope — mas é a validação correta)
   try {
     DriveApp.getFolderById(folderId);
   } catch (e) {
     throw new Error(
-      'Pasta inválida ou sem acesso. Verifique "PDF_VISITAS_FOLDER_ID".'
+      `Pasta inválida ou sem acesso. Verifique "PDF_VISITAS_FOLDER_ID" (atual: ${folderId}).`
     );
+  }
+
+  if (!folderIdProp && folderId) {
+    try { props.setProperty("PDF_VISITAS_FOLDER_ID", folderId); } catch (e) {}
   }
 
   return folderId;
@@ -238,7 +238,7 @@ function PDF_listVisitasForSelect_v1() {
 
       return {
         id: idv,
-        label: `Data ${data || "-"} • Clientes: ${nomes}`
+        label: `Clientes: ${nomes} • Data: ${data || "-"}`
       };
     })
     .filter(Boolean);

@@ -46,6 +46,14 @@ function FU_dailyFollowUpJob_() {
   return { ok: true, todayCount: itemsToday.length, calendar: sync };
 }
 
+
+function FU_syncAgendaNow_v1() {
+  ensureSchema_();
+  Logger.log('[FollowUp] Sincronização manual da agenda solicitada via menu.');
+  var sync = FU_syncAllFutureFollowUpsToCalendar_();
+  Logger.log('[FollowUp] Sincronização manual concluída: ' + JSON.stringify(sync));
+  return { ok: true, source: 'manual_menu', calendar: sync };
+}
 function FU_syncFollowUpForRecord_(sheetName, idCol, idVal, obj) {
   try {
     if (!FU_isMonitoredSheet_(sheetName)) return { ok: true, skipped: true };

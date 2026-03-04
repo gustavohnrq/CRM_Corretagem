@@ -13,7 +13,7 @@
       <div class="btns"><button class="secondary" onclick="nav('Form_Menu')">← Menu</button></div>
     </div>
 
-    <div class="grid">
+    <div class="grid" style="grid-template-columns: 7fr 3fr;">
       <div class="card">
         <h3>Registros de Proposta</h3>
         <div class="btns">
@@ -21,6 +21,11 @@
           <button class="ok" onclick="newRecord()">+ Novo</button>
         </div>
         <div class="list" id="list" style="margin-top:10px;"></div>
+
+        <div class="card" style="margin:12px 0 0 0;">
+          <h3>Detalhes do Registro Selecionado</h3>
+          <div id="registroDetail" class="hint">Clique em uma proposta na lista para ver os detalhes aqui.</div>
+        </div>
       </div>
 
       <div class="card">
@@ -52,7 +57,15 @@
             </div>
             <div>
               <label>Modalidade de Pagamento</label>
-              <input name="Modalidade de Pagamento" placeholder="Ex: financiamento + FGTS" />
+              <input name="Modalidade de Pagamento" list="modalidadesPagamento" placeholder="Ex: financiamento + FGTS" />
+              <datalist id="modalidadesPagamento">
+                <option value="À vista"></option>
+                <option value="Financiamento"></option>
+                <option value="Financiamento + FGTS"></option>
+                <option value="Consórcio"></option>
+                <option value="Permuta"></option>
+                <option value="Parcelado com proprietário"></option>
+              </datalist>
             </div>
           </div>
 
@@ -64,6 +77,8 @@
             <option>Recusada</option>
             <option>Contraproposta</option>
           </select>
+                  <label>Próximo Follow-up</label>
+          <input name="Próximo Follow-up" id="ProxFUProposta" placeholder="DD/MM/AAAA" />
         </form>
 
         <div class="btns">
@@ -96,28 +111,58 @@
           return;
         }
 
+        const fato = ctx.fato || {};
+        const agenda = ctx.agenda || {};
         const imv = ctx.imovel || {};
         const end = imv["Endereço"] || imv["Endereco"] || imv["Quadra/Endereço"] || "-";
         const clientes = (ctx.clientes_nomes || []).join(", ") || "-";
+        const bairro = imv["Bairro"] || "-";
+        const cidade = imv["Cidade"] || "-";
         el.innerHTML = `
           <div><b>Visita:</b> ${escapeHtml(ctx.id_visita || "-")} • <b>Data:</b> ${escapeHtml(ctx.data_visita || "-")}</div>
+          <div><b>Agendamento:</b> ${escapeHtml(ctx.id_agendamento || "-")} • <b>Telefone Agenda:</b> ${escapeHtml(agenda["Telefone"] || "-")}</div>
           <div><b>Imóvel:</b> ${escapeHtml(ctx.id_imovel || "-")} • <b>Endereço:</b> ${escapeHtml(end)}</div>
+          <div><b>Bairro/Cidade:</b> ${escapeHtml(bairro)} / ${escapeHtml(cidade)} • <b>Captação:</b> ${escapeHtml(fato["Tipo_Captacao"] || "-")}</div>
           <div><b>Clientes:</b> ${escapeHtml(clientes)}</div>
           <div><b>Nota média da visita:</b> ${ctx.nota_media == null ? "-" : Number(ctx.nota_media).toFixed(2)}</div>
         `;
       }
 
       function loadVisitas(){
-        google.script.run.withSuccessHandler(items => {
-          const sel = byId("Id_Visita");
-          sel.innerHTML = `<option value="">Selecione...</option>`;
-          (items || []).forEach(it => {
-            const op = document.createElement("option");
-            op.value = it.id;
-            op.textContent = it.label;
-            sel.appendChild(op);
-          });
-        }).PV_listVisitasForSelect_v1();
+        google.script.run
+          .withSuccessHandler(items => {
+            const sel = byId("Id_Visita");
+            sel.innerHTML = `<option value="">Selecione...</option>`;
+            (items || []).forEach(it => {
+              const op = document.createElement("option");
+              op.value = it.id;
+              op.textContent = it.label;
+              sel.appendChild(op);
+            });
+          })
+          .withFailureHandler(err => {
+            toast("Erro ao carregar visitas: " + (err.message || err));
+          })
+          .PV_listVisitasForSelect_v1();
+      }
+
+
+      function renderRegistroDetail(it){
+        const el = byId("registroDetail");
+        if (!it) {
+          el.innerHTML = "Clique em uma proposta na lista para ver os detalhes aqui.";
+          return;
+        }
+
+        el.innerHTML = `
+          <div><b>Proposta:</b> ${escapeHtml(it.id || "-")} • <b>Status:</b> ${escapeHtml(it.raw["status"] || "-")}</div>
+          <div><b>Valor:</b> ${escapeHtml(String(it.raw["Valor da Proposta"] || "-"))} • <b>Modalidade:</b> ${escapeHtml(String(it.raw["Modalidade de Pagamento"] || "-"))}</div>
+          <div><b>Visita:</b> ${escapeHtml(it.raw["Id_Visita"] || "-")} • <b>Data visita:</b> ${escapeHtml(it.enrich.dataVisita || "-")}</div>
+          <div><b>Agendamento:</b> ${escapeHtml(it.enrich.idAgendamento || "-")} • <b>Imóvel:</b> ${escapeHtml(it.enrich.idImovel || "-")}</div>
+          <div><b>Clientes:</b> ${escapeHtml(it.enrich.clientes || "-")}</div>
+          <div><b>Endereço:</b> ${escapeHtml(it.enrich.endereco || "-")}</div>
+          <div><b>Nota visita:</b> ${it.enrich.notaMediaVisita == null || it.enrich.notaMediaVisita === "" ? "-" : Number(it.enrich.notaMediaVisita).toFixed(2)}</div>
+        `;
       }
 
       function loadList(){
@@ -126,6 +171,7 @@
           el.innerHTML = "";
           if (!items || !items.length) {
             el.innerHTML = `<div class="hint">Sem propostas.</div>`;
+            renderRegistroDetail(null);
             return;
           }
 
@@ -134,10 +180,11 @@
             d.className = "item";
             d.innerHTML = `
               <b>${escapeHtml(it.label)}</b>
-              <small>Visita ${escapeHtml(it.raw["Id_Visita"] || "-")} • Clientes: ${escapeHtml(it.enrich.clientes || "-")}</small>
+              <small>Visita ${escapeHtml(it.raw["Id_Visita"] || "-")} • Data visita: ${escapeHtml(it.enrich.dataVisita || "-")} • Agendamento: ${escapeHtml(it.enrich.idAgendamento || "-")}</small>
               <small>Imóvel ${escapeHtml(it.enrich.idImovel || "-")} • ${escapeHtml(it.enrich.endereco || "-")}</small>
+              <small>Clientes: ${escapeHtml(it.enrich.clientes || "-")} • Nota visita: ${it.enrich.notaMediaVisita == null || it.enrich.notaMediaVisita === "" ? "-" : Number(it.enrich.notaMediaVisita).toFixed(2)}</small>
             `;
-            d.onclick = () => loadById(it.id);
+            d.onclick = () => { renderRegistroDetail(it); loadById(it.id); };
             el.appendChild(d);
           });
         }).PV_listPropostasDetailed_v1();
@@ -158,6 +205,7 @@
         const idVisita = byId("Id_Visita").value;
         if (!idVisita) {
           byId("visitaCtx").innerHTML = "Selecione uma visita para ver detalhes.";
+        renderRegistroDetail(null);
           return;
         }
         google.script.run.withSuccessHandler(renderVisitaCtx).PV_getVisitaContextById_v1(idVisita);
@@ -167,6 +215,7 @@
         currentId = null;
         clearForm("form");
         byId("visitaCtx").innerHTML = "Selecione uma visita para ver detalhes.";
+        renderRegistroDetail(null);
         google.script.run.withSuccessHandler(id => { byId("Id_Proposta").value = id; }).PV_getNextIdProposta_v1();
       }
 
@@ -197,6 +246,7 @@
 
       byId("Id_Visita").addEventListener("change", onChangeVisita);
       maskDDMMYYYY(byId("Data"));
+      maskDDMMYYYY(byId("ProxFUProposta"));
       attachMoneyMask(byId("Valor_Proposta"));
       loadVisitas();
       loadList();

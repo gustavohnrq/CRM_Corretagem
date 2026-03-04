@@ -17,16 +17,17 @@
       <h3>Escolha um módulo</h3>
 
       <div class="menuGrid">
-        <button type="button" onclick="nav('Form_BaseClientes')">📒 Base de Clientes</button>
-        <button type="button" onclick="nav('Form_Estoque')">🏠 Estoque de Imóveis</button>
-        <button type="button" onclick="nav('Form_LeadsCompradores')">📥 Leads Compradores</button>
-        <button type="button" onclick="nav('Form_LeadsVendedores')">📤 Leads Vendedores</button>
-        <button type="button" onclick="nav('Form_AgendarVisita')">🗓️ Agenda de Visitas</button>
-        <button type="button" onclick="nav('Form_RegistrarVisita')">🧾 Registrar Visita</button>
-        <button type="button" onclick="nav('Form_Proposta')">💬 Registrar Proposta</button>
-        <button type="button" onclick="nav('Form_Vendas')">💰 Registrar Venda</button>
-        <button class="ok" onclick="nav('Form_PDFVisitas')">🧾 PDF Visitas</button>
-        <button type="button" class="secondary" onclick="refreshDashboard()">🔄 Atualizar Painel</button>
+        <button type="button" onclick="nav('Form_BaseClientes')">Base de Clientes</button>
+        <button type="button" onclick="nav('Form_Captacao')">Registrar Captação</button>
+        <button type="button" onclick="nav('Form_Estoque')">Estoque de Imóveis</button>
+        <button type="button" onclick="nav('Form_LeadsCompradores')">Leads Compradores</button>
+        <button type="button" onclick="nav('Form_LeadsVendedores')">Leads Vendedores</button>
+        <button type="button" onclick="nav('Form_AgendarVisita')">Agenda de Visitas</button>
+        <button type="button" onclick="nav('Form_RegistrarVisita')">Registrar Visita</button>
+        <button type="button" onclick="nav('Form_Proposta')">Registrar Proposta</button>
+        <button type="button" onclick="nav('Form_Vendas')">Registrar Venda</button>
+        <button class="ok" onclick="nav('Form_PDFVisitas')">PDF Visitas</button>
+        <button type="button" class="secondary" onclick="refreshDashboard()">Atualizar Painel</button>
       </div>
 
       <!-- LINHA SOLICITADA -->
@@ -35,30 +36,27 @@
       <!-- DASHBOARD -->
       <div class="grid" style="grid-template-columns: 1fr 1fr; gap:12px;">
         <div class="card" style="margin:0;">
-          <h3>Controle Semanal (últimas 4 semanas)</h3>
+          <h3>Controle Semanal Estratégico</h3>
+          <div class="row">
+            <div><label>Semana (início)</label><input id="fSemanaIni" type="date" /></div>
+            <div><label>Semana (fim)</label><input id="fSemanaFim" type="date" /></div>
+          </div>
           <div class="hint" id="kpiSemanal"></div>
           <div style="margin-top:10px; overflow:auto;">
             <table style="width:100%; border-collapse:collapse; font-size:12px;">
-              <thead>
-                <tr>
-                  <th style="text-align:left; padding:8px; border-bottom:1px solid var(--line);">Semana</th>
-                  <th style="text-align:right; padding:8px; border-bottom:1px solid var(--line);">Ligações</th>
-                  <th style="text-align:right; padding:8px; border-bottom:1px solid var(--line);">Conversas</th>
-                  <th style="text-align:right; padding:8px; border-bottom:1px solid var(--line);">Visitas</th>
-                  <th style="text-align:right; padding:8px; border-bottom:1px solid var(--line);">Propostas</th>
-                  <th style="text-align:right; padding:8px; border-bottom:1px solid var(--line);">Vendas</th>
-                </tr>
-              </thead>
+              <thead><tr><th style="text-align:left; padding:8px; border-bottom:1px solid var(--line);">Meta</th><th style="text-align:right; padding:8px; border-bottom:1px solid var(--line);">Atual</th><th style="text-align:right; padding:8px; border-bottom:1px solid var(--line);">Meta</th></tr></thead>
               <tbody id="tblSemanal"></tbody>
             </table>
           </div>
-          <div class="btns" style="margin-top:10px;">
-            <button class="secondary" onclick="rebuild('weekly')">♻️ Recalcular Semanal</button>
-          </div>
+          <div class="btns" style="margin-top:10px;"><button class="secondary" onclick="refreshDashboard()">Atualizar período</button></div>
         </div>
 
         <div class="card" style="margin:0;">
-          <h3>Funil Mensal (mês atual)</h3>
+          <h3>Funil de Conversão</h3>
+          <div class="row">
+            <div><label>Período (início)</label><input id="fFunilIni" type="date" /></div>
+            <div><label>Período (fim)</label><input id="fFunilFim" type="date" /></div>
+          </div>
           <div class="hint" id="kpiMensal"></div>
           <div style="margin-top:10px; overflow:auto;">
             <table style="width:100%; border-collapse:collapse; font-size:12px;">
@@ -73,30 +71,48 @@
             </table>
           </div>
           <div class="btns" style="margin-top:10px;">
-            <button class="secondary" onclick="rebuild('monthly')">♻️ Recalcular Mensal</button>
+            <button class="secondary" onclick="refreshDashboard()">Recalcular período</button>
           </div>
         </div>
 
         <div class="card" style="margin:0; grid-column: 1 / -1;">
-          <h3>Follow-up</h3>
-          <div class="hint" id="kpiFollow"></div>
+          <h3>KPIs de Desempenho (período do Funil de Conversão)</h3>
+          <div class="grid" id="kpiCharts" style="grid-template-columns: repeat(4, 1fr); gap:10px;"></div>
+        </div>
 
-          <div class="row" style="margin-top:10px;">
-            <div class="card" style="margin:0;">
-              <h3 style="margin-bottom:8px;">Vencidos</h3>
-              <div class="list" id="fuOverdue" style="max-height:240px;"></div>
-            </div>
-            <div class="card" style="margin:0;">
-              <h3 style="margin-bottom:8px;">Hoje</h3>
-              <div class="list" id="fuToday" style="max-height:240px;"></div>
+        <div class="grid" style="grid-template-columns: 1fr 1fr; gap:12px; grid-column: 1 / -1;">
+          <div class="card" style="margin:0;">
+            <h3>Empresa • Estoque Total</h3>
+            <div class="hint">Divisão por bairro (sem filtro de data)</div>
+            <div class="list" id="bairroEstoque" style="max-height:220px; margin-top:8px;"></div>
+            <div class="card" style="margin:8px 0 0 0;">
+              <h3>Ticket médio • Top 10 bairros com +30 anúncios</h3>
+              <div class="list" id="topBairrosCarosEstoque" style="max-height:220px;"></div>
             </div>
           </div>
 
-          <div class="card" style="margin:10px 0 0 0;">
-            <h3 style="margin-bottom:8px;">Próximos 7 dias</h3>
-            <div class="list" id="fuWeek" style="max-height:240px;"></div>
+          <div class="card" style="margin:0;">
+            <h3>Minha Carteira • Captações</h3>
+            <div class="hint">Divisão por bairro da carteira</div>
+            <div class="list" id="bairroCaptacoes" style="max-height:220px; margin-top:8px;"></div>
+            <div class="card" style="margin:8px 0 0 0;">
+              <h3>Ticket médio da carteira</h3>
+              <div class="hint" id="ticketCarteiraCaptacao"></div>
+              <div class="hint" id="metaCaptacaoMes" style="margin-top:8px;"></div>
+            </div>
           </div>
         </div>
+
+        <div class="card" style="margin:0; grid-column: 1 / -1;">
+          <h3>Minha Agenda Google</h3>
+          <div class="hint">Visualização da agenda para acompanhamento diário do funil e follow-ups.</div>
+          <div class="btns" style="margin-top:8px;">
+            <button class="secondary" onclick="syncAgendaNow()">Atualizar agenda agora</button>
+          </div>
+          <div style="margin-top:10px; border:1px solid var(--line); border-radius:12px; overflow:hidden; height:620px;">
+            <iframe src="https://calendar.google.com/calendar/embed?src=gustavohenriquer598%40gmail.com&ctz=America%2FSao_Paulo&mode=AGENDA" style="border:0; width:100%; height:100%;" width="100%" height="100%" frameborder="0" scrolling="no"></iframe>
+          </div>
+        </div></div>
       </div>
     </div>
 
@@ -113,66 +129,115 @@
         google.script.run
           .withSuccessHandler(renderDashboard)
           .withFailureHandler(err => toast("Erro no painel: " + (err.message || err)))
-          .getDashboardData();
+          .getDashboardData({ weekStart: byId("fSemanaIni")?.value || "", weekEnd: byId("fSemanaFim")?.value || "", funilStart: byId("fFunilIni")?.value || "", funilEnd: byId("fFunilFim")?.value || "" });
       }
 
-      function rebuild(kind){
-        const fn = (kind === "weekly") ? "rebuildControleSemanal" : "rebuildFunilMensal";
+
+      function syncAgendaNow(){
         google.script.run
-          .withSuccessHandler(() => refreshDashboard())
-          .withFailureHandler(err => toast("Erro ao recalcular: " + (err.message || err)))[fn]();
+          .withSuccessHandler(function(res){
+            const c = (res && res.calendar) ? res.calendar : { total:0, created:0, updated:0, failed:0 };
+            toast(`Agenda sincronizada. Total: ${c.total||0} • Criados: ${c.created||0} • Atualizados: ${c.updated||0} • Falhas: ${c.failed||0}`);
+          })
+          .withFailureHandler(err => toast("Erro ao sincronizar agenda: " + (err.message || err)))
+          .FU_syncAgendaNow_v1();
       }
+
 
       function renderDashboard(d){
-        // KPIs
-        byId("kpiSemanal").innerHTML = `Total 4 semanas: <b>${nfmt(d.weeklyTotals.ligacoes)}</b> ligações • <b>${nfmt(d.weeklyTotals.visitas)}</b> visitas • <b>${nfmt(d.weeklyTotals.vendas)}</b> vendas`;
-        byId("kpiMensal").innerHTML = `Mês ${escapeHtml(d.monthKey)}: <b>${nfmt(d.monthly.funil.vendas)}</b> vendas • conv. Proposta→Venda: <b>${pct(d.monthly.rates.proposta_para_venda)}</b>`;
-        byId("kpiFollow").innerHTML = `Vencidos: <b>${d.follow.overdue.length}</b> • Hoje: <b>${d.follow.today.length}</b> • Próx. 7 dias: <b>${d.follow.week.length}</b>`;
+        byId("kpiSemanal").innerHTML = `Período semanal: <b>${escapeHtml(d.period.weekStart)}</b> até <b>${escapeHtml(d.period.weekEnd)}</b>`;
+        byId("kpiMensal").innerHTML = `Período: <b>${escapeHtml(d.period.funilStart)}</b> até <b>${escapeHtml(d.period.funilEnd)}</b> • Vendas: <b>${nfmt(d.monthly.funil.vendas)}</b> • Captações: <b>${nfmt(d.monthly.funil.captacoes)}</b>`;
 
-        // Tabela semanal
-        const tb = byId("tblSemanal");
-        tb.innerHTML = "";
-        d.weeklyRows.forEach(r=>{
-          const tr = document.createElement("tr");
-          tr.innerHTML = `
-            <td style="padding:8px; border-bottom:1px solid rgba(34,49,85,.35)">${escapeHtml(r.semana)}</td>
-            <td style="padding:8px; text-align:right; border-bottom:1px solid rgba(34,49,85,.35)">${nfmt(r.ligacoes)}</td>
-            <td style="padding:8px; text-align:right; border-bottom:1px solid rgba(34,49,85,.35)">${nfmt(r.conversas)}</td>
-            <td style="padding:8px; text-align:right; border-bottom:1px solid rgba(34,49,85,.35)">${nfmt(r.visitas)}</td>
-            <td style="padding:8px; text-align:right; border-bottom:1px solid rgba(34,49,85,.35)">${nfmt(r.propostas)}</td>
-            <td style="padding:8px; text-align:right; border-bottom:1px solid rgba(34,49,85,.35)">${nfmt(r.vendas)}</td>
-          `;
+        const tb = byId("tblSemanal"); tb.innerHTML = "";
+        (d.weekly.rows || []).forEach(r=>{
+          const color = r.status === "green" ? "#37d67a" : (r.status === "yellow" ? "#ffd166" : "#ff5c73");
+          const tr=document.createElement("tr");
+          tr.innerHTML = `<td style="padding:8px; border-bottom:1px solid rgba(34,49,85,.35)">${escapeHtml(r.label)}</td><td style="padding:8px; text-align:right; border-bottom:1px solid rgba(34,49,85,.35); color:${color}; font-weight:700">${nfmt(r.atual)}</td><td style="padding:8px; text-align:right; border-bottom:1px solid rgba(34,49,85,.35)">${nfmt(r.min)}-${nfmt(r.max)}</td>`;
           tb.appendChild(tr);
         });
 
-        // Tabela funil mensal
-        const tf = byId("tblFunil");
-        tf.innerHTML = "";
-        const f = d.monthly.funil;
-        const rates = d.monthly.rates;
-
-        const rows = [
-          ["Leads", f.leads, null],
-          ["Contatos", f.contatos, rates.lead_para_contato],
-          ["Visitas", f.visitas, rates.contato_para_visita],
-          ["Propostas", f.propostas, rates.visita_para_proposta],
-          ["Vendas", f.vendas, rates.proposta_para_venda]
-        ];
-
-        rows.forEach(([name, qty, rate])=>{
-          const tr = document.createElement("tr");
-          tr.innerHTML = `
-            <td style="padding:8px; border-bottom:1px solid rgba(34,49,85,.35)">${escapeHtml(name)}</td>
-            <td style="padding:8px; text-align:right; border-bottom:1px solid rgba(34,49,85,.35)">${nfmt(qty)}</td>
-            <td style="padding:8px; text-align:right; border-bottom:1px solid rgba(34,49,85,.35)">${rate===null ? "-" : pct(rate)}</td>
-          `;
+        const tf = byId("tblFunil"); tf.innerHTML = "";
+        const f=d.monthly.funil, rates=d.monthly.rates;
+        [["Leads",f.leads,rates.leads_para_visitas],["Visitas",f.visitas,rates.visitas_para_propostas],["Propostas",f.propostas,rates.propostas_para_vendas],["Vendas",f.vendas,null],["Captações",f.captacoes,rates.lead_vendedor_para_captacao]].forEach(([name,qty,rate])=>{
+          const tr=document.createElement("tr");
+          tr.innerHTML=`<td style="padding:8px; border-bottom:1px solid rgba(34,49,85,.35)">${escapeHtml(name)}</td><td style="padding:8px; text-align:right; border-bottom:1px solid rgba(34,49,85,.35)">${nfmt(qty)}</td><td style="padding:8px; text-align:right; border-bottom:1px solid rgba(34,49,85,.35)">${rate===null?"-":pct(rate)}</td>`;
           tf.appendChild(tr);
         });
 
-        // Follow lists
-        renderFollowList("fuOverdue", d.follow.overdue);
-        renderFollowList("fuToday", d.follow.today);
-        renderFollowList("fuWeek", d.follow.week);
+        renderKpiCharts(d.kpis || []);
+        renderPortfolioKpis(d.kpisPortfolio || {});
+
+        const boards = d.follow || {};
+        renderFollowList("fuLeads", boards.leads ? [].concat(boards.leads.overdue||[], boards.leads.today||[], boards.leads.week||[]) : []);
+        renderFollowList("fuCaptacoes", boards.captacoes ? [].concat(boards.captacoes.overdue||[], boards.captacoes.today||[], boards.captacoes.week||[]) : []);
+        renderFollowList("fuVisitas", boards.visitas ? [].concat(boards.visitas.overdue||[], boards.visitas.today||[], boards.visitas.week||[]) : []);
+        renderFollowList("fuPropostas", boards.propostas ? [].concat(boards.propostas.overdue||[], boards.propostas.today||[], boards.propostas.week||[]) : []);
+        renderFollowList("fuVendas", boards.vendas ? [].concat(boards.vendas.overdue||[], boards.vendas.today||[], boards.vendas.week||[]) : []);
+
+        byId("kpiFollow").innerHTML = "Acompanhamento por quadro (vencidos + hoje + próximos 7 dias).";
+      }
+
+
+      function renderKpiCharts(kpis){
+        const host = byId("kpiCharts");
+        host.innerHTML = "";
+        (kpis || []).forEach(k => {
+          const progress = Math.max(0, Math.min(1, (Number(k.value)||0) / (Number(k.target)||1)));
+          const color = progress >= 1 ? "#22c55e" : (progress >= 0.7 ? "#f59e0b" : "#ef4444");
+          const maxSeries = Math.max(1, ...(k.series || [0]), Number(k.max||1));
+          const bars = (k.series || []).map(v=>{
+            const h = Math.max(6, Math.round((Number(v)||0) / maxSeries * 58));
+            return `<div style="width:10px;height:${h}px;background:${color};border-radius:3px;opacity:.8"></div>`;
+          }).join("");
+
+          const card = document.createElement("div");
+          card.className = "card";
+          card.style.margin = "0";
+          card.innerHTML = `
+            <div style="font-size:12px;color:var(--muted)">${escapeHtml(k.title || "KPI")}</div>
+            <div style="font-size:22px;font-weight:700;margin-top:4px;">${escapeHtml(k.display || "-")}</div>
+            <div class="hint" style="margin-top:4px;">${escapeHtml(k.targetDisplay || "")}</div>
+            <div style="height:8px;border-radius:999px;background:rgba(148,163,184,.2);margin-top:10px;overflow:hidden;"><div style="width:${Math.round(progress*100)}%;height:100%;background:${color};"></div></div>
+            <div style="display:flex;align-items:flex-end;gap:4px;height:62px;margin-top:10px;">${bars || '<div class="hint">sem dados</div>'}</div>
+          `;
+          host.appendChild(card);
+        });
+      }
+
+
+      function renderPortfolioKpis(data){
+        renderSimpleList("bairroEstoque", (data.empresa && data.empresa.divisaoBairro) || [], x => `${x.bairro} • ${x.qtd}`);
+        renderSimpleList("bairroCaptacoes", (data.carteira && data.carteira.divisaoBairro) || [], x => `${x.bairro} • ${x.qtd}`);
+
+        renderSimpleList("topBairrosCarosEstoque", (data.empresa && data.empresa.topBairrosCom30) || [], x => `${x.bairro} • ${x.qtd} anúncios • ${formatBRLNum(x.avg || 0)}`);
+
+        const ticket = data.carteira ? (data.carteira.ticketMedio || 0) : 0;
+        const totalQtd = data.carteira ? (data.carteira.totalQtd || 0) : 0;
+        const totalValor = data.carteira ? (data.carteira.totalValor || 0) : 0;
+        byId("ticketCarteiraCaptacao").innerHTML = `Ticket médio da carteira: <b>${formatBRLNum(ticket)}</b> • (${totalQtd} captações / ${formatBRLNum(totalValor)})`;
+
+        const meta = data.captacaoMeta || { periodoQtd:0, mesesPeriodo:1, metaPeriodo:0, atingimento:0 };
+        byId("metaCaptacaoMes").innerHTML = `Captações no período: <b>${meta.periodoQtd || 0}</b> • Meta do período (${meta.mesesPeriodo || 1} mês(es) × 5): <b>${Math.round(meta.metaPeriodo || 0)}</b> • Atingimento: <b>${Math.round((meta.atingimento||0)*100)}%</b>`;
+      }
+
+      function renderSimpleList(elId, arr, mapFn){
+        const el = byId(elId);
+        el.innerHTML = "";
+        if (!arr || !arr.length){
+          el.innerHTML = `<div class="hint">Sem dados.</div>`;
+          return;
+        }
+        arr.forEach(x=>{
+          const div = document.createElement("div");
+          div.className = "item";
+          div.innerHTML = `<small>${escapeHtml(mapFn(x))}</small>`;
+          el.appendChild(div);
+        });
+      }
+
+      function formatBRLNum(n){
+        const v = Number(n || 0);
+        return v.toLocaleString("pt-BR", { style:"currency", currency:"BRL" });
       }
 
       function renderFollowList(elId, arr){
@@ -191,6 +256,9 @@
         });
       }
 
+      (()=>{ const t=new Date(); const day=t.getDay(); const diff=(day===0?6:day-1); const monday=new Date(t.getTime()-diff*86400000); const sunday=new Date(monday.getTime()+6*86400000); const fmt=(d)=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; byId("fSemanaIni").value=fmt(monday); byId("fSemanaFim").value=fmt(sunday);
+      const firstDay = new Date(t.getFullYear(), t.getMonth(), 1);
+      byId("fFunilIni").value=fmt(firstDay); byId("fFunilFim").value=fmt(t); })();
       refreshDashboard();
     </script>
   </body>

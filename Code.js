@@ -173,11 +173,30 @@ function doGet(e) {
   const page = normalizePageName_(requested);
   const safePage = CFG.PAGES[page] ? page : CFG.DEFAULT_PAGE;
 
-  return HtmlService
-    .createTemplateFromFile(safePage)
-    .evaluate()
-    .setTitle(CFG.TITLE)
-    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  try {
+    return HtmlService
+      .createTemplateFromFile(safePage)
+      .evaluate()
+      .setTitle(CFG.TITLE)
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  } catch (err) {
+    var msg = String(err && err.message ? err.message : err);
+    Logger.log('[doGet] Falha ao avaliar template "' + safePage + '": ' + msg);
+
+    if (safePage === 'Form_Captacao') {
+      var raw = HtmlService.createHtmlOutputFromFile('Form_Captacao').getContent();
+      var hydrated = raw
+        .replace("<?!= include('Estilos'); ?>", include('Estilos'))
+        .replace("<?!= include('JsBase'); ?>", include('JsBase'));
+
+      return HtmlService
+        .createHtmlOutput(hydrated)
+        .setTitle(CFG.TITLE)
+        .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+    }
+
+    throw err;
+  }
 }
 
 function include(filename) {

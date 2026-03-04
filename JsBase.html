@@ -6,13 +6,14 @@
     if (!m) return m;
 
     // Simplifica mensagens de sucesso removendo IDs pouco úteis.
-    const isSuccessLike = /salvo|sucesso|atualizado|criado|exclu[ií]do|gerado|sincronizada|reservado/i.test(m);
+    const isSuccessLike = /salvo|sucesso|atualizado|criado|exclu[ií]do|gerado|sincronizad[ao]|reservado/i.test(m);
     if (isSuccessLike) {
       m = m
+        .replace(/^\s*sucesso\s*[.:\-]?\s*/i, "")
         .replace(/\s*\((?:ID|Id_Visita|id_Avaliacao|id)\s+[^)]+\)/gi, "")
         .replace(/\s*\(\s*[0-9a-zA-Z\-]{8,}\s*\)\s*$/g, "")
         .replace(/\b(ID|Id_Visita|id_Avaliacao|id)\s*[:#]?\s*[0-9a-zA-Z\-]{1,}/gi, "")
-        .replace(/:\s*[0-9a-zA-Z\-]{1,}\s*$/g, "")
+        .replace(/[:\-]\s*[0-9a-zA-Z\-]{1,}\s*$/g, "")
         .replace(/\s{2,}/g, " ")
         .replace(/[\s.:;-]+$/g, "")
         .trim();
@@ -22,7 +23,7 @@
         m = "Id_Visita reservado";
       }
 
-      m = /^sucesso\b/i.test(m) ? m : `Sucesso. ${m}`;
+      m = m ? `Sucesso. ${m}` : "Sucesso.";
     }
 
     return m;

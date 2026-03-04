@@ -231,14 +231,6 @@
         const v = Number(n || 0);
         return v.toLocaleString("pt-BR", { style:"currency", currency:"BRL" });
       }
-        arr.forEach(x=>{
-          const div = document.createElement("div");
-          div.className = "item";
-          div.innerHTML = `<b>${escapeHtml(x.nome || "Sem nome")}</b>
-            <small>${escapeHtml(x.tipo || "")} • ${escapeHtml(x.proximo || "")} • ${escapeHtml(x.telefone || "")}</small>`;
-          el.appendChild(div);
-        });
-      }
 
       (()=>{ const t=new Date(); const day=t.getDay(); const diff=(day===0?6:day-1); const monday=new Date(t.getTime()-diff*86400000); const sunday=new Date(monday.getTime()+6*86400000); const fmt=(d)=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; byId("fSemanaIni").value=fmt(monday); byId("fSemanaFim").value=fmt(sunday);
       const firstDay = new Date(t.getFullYear(), t.getMonth(), 1);

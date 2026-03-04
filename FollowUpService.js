@@ -14,6 +14,7 @@ var FU_CFG = {
     { name: 'Base_Clientes', idCandidates: ['ID', 'Id', 'id'], title: 'Cliente' },
     { name: 'Leads_Compradores', idCandidates: ['ID', 'Id', 'id'], title: 'Lead Comprador' },
     { name: 'Leads_Vendedores', idCandidates: ['ID', 'Id', 'id'], title: 'Lead Vendedor' },
+    { name: 'Agenda_Visitas', idCandidates: ['ID', 'Id', 'id'], title: 'Visita' },
     { name: 'Fato_Visitas', idCandidates: ['Id_Visita', 'ID_Visita', 'id_visita'], title: 'Visita' },
     { name: 'Fato_Proposta', idCandidates: ['Id_Proposta', 'ID_ProPOSTA', 'id_proposta'], title: 'Proposta' },
     { name: 'Fato_Venda', idCandidates: ['Id_Venda', 'id_venda'], title: 'Venda' },
@@ -59,7 +60,7 @@ function FU_syncAgendaNow_v1() {
 function FU_syncFollowUpForRecord_(sheetName, idCol, idVal, obj) {
   try {
     if (!FU_isMonitoredSheet_(sheetName)) return { ok: true, skipped: true };
-    if (!FU_sheetHasExactFollowUpColumn_(sheetName)) return { ok: true, skipped: true, reason: 'sheet_without_proximo_followup' };
+    if (!FU_sheetHasFollowDateColumn_(sheetName)) return { ok: true, skipped: true, reason: 'sheet_without_follow_date' };
 
     var record = obj || DataService.getById(sheetName, idCol, idVal);
     if (!record) return { ok: true, skipped: true, reason: 'record_not_found' };
@@ -151,20 +152,21 @@ function FU_sendDailyEmail_(items) {
 }
 
 
-function FU_sheetHasExactFollowUpColumn_(sheetName) {
+function FU_sheetHasFollowDateColumn_(sheetName) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sh = ss.getSheetByName(sheetName);
   if (!sh) return false;
   var lc = sh.getLastColumn();
   if (lc < 1) return false;
   var headers = sh.getRange(1, 1, 1, lc).getDisplayValues()[0].map(function (h) { return String(h || '').trim(); });
+  if (sheetName === 'Agenda_Visitas') return headers.indexOf('Data') !== -1;
   return headers.indexOf('Próximo Follow-up') !== -1;
 }
 
 function FU_collectFollowUpsByRange_(start, end) {
   var out = [];
   FU_CFG.SHEETS.forEach(function (cfg) {
-    if (!FU_sheetHasExactFollowUpColumn_(cfg.name)) return;
+    if (!FU_sheetHasFollowDateColumn_(cfg.name)) return;
     var rows = FU_readSheetObjects_(cfg.name);
     rows.forEach(function (row) {
       var item = FU_buildFollowUpItem_(cfg.name, row, null, null);
@@ -181,8 +183,9 @@ function FU_collectFollowUpsByRange_(start, end) {
 function FU_buildFollowUpItem_(sheetName, row, idCol, idVal) {
   if (!row) return null;
 
-  var followUpRaw = String(row['Próximo Follow-up'] || '').trim();
-  var followUpDate = FU_parseDateAny_(followUpRaw);
+  var follow = FU_getFollowDateForRow_(sheetName, row);
+  var followUpRaw = follow.raw;
+  var followUpDate = follow.date;
   if (!followUpDate) return null;
 
   var recordId = String(idVal || '').trim();
@@ -205,6 +208,19 @@ function FU_buildFollowUpItem_(sheetName, row, idCol, idVal) {
     row: row,
     details: details
   };
+}
+
+
+function FU_getFollowDateForRow_(sheetName, row) {
+  if (!row) return { raw: '', date: null };
+
+  if (sheetName === 'Agenda_Visitas') {
+    var rawAgenda = String(row['Data'] || '').trim();
+    return { raw: rawAgenda, date: FU_parseDateAny_(rawAgenda) };
+  }
+
+  var raw = String(row['Próximo Follow-up'] || '').trim();
+  return { raw: raw, date: FU_parseDateAny_(raw) };
 }
 
 function FU_buildHierarchyDetails_(sheetName, row) {
@@ -299,7 +315,7 @@ function FU_upsertCalendarEventForItem_(item) {
   var title = FU_buildEventTitle_(item);
   var desc = FU_buildEventDescription_(item);
 
-  Logger.log('[FollowUp] Payload task => list=' + FU_CFG.TASKLIST_ID + ' | key=' + item.key + ' | title=' + title + ' | due=' + FU_fmtDate_(item.followUpDate) + ' | start=06:00 | end=18:00');
+  Logger.log('[FollowUp] Payload task => list=' + FU_CFG.TASKLIST_ID + ' | key=' + item.key + ' | title=' + title + ' | due=' + FU_fmtDate_(item.followUpDate) + ' | hour=' + (FU_pick_(item.row, ['Hora']) || '-') + ' | start=06:00 | end=18:00');
   Logger.log('[FollowUp] Payload descrição => ' + desc);
 
   var matches = FU_findTasksByKey_(item.key);
@@ -308,7 +324,7 @@ function FU_upsertCalendarEventForItem_(item) {
   if (match) {
     match.title = title;
     match.notes = desc + '\nJanela: 06:00 às 18:00';
-    match.due = FU_taskDueIso_(item.followUpDate);
+    match.due = FU_taskDueIso_(item.followUpDate, FU_pick_(item.row, ['Hora']));
     if (match.status !== 'completed') match.status = 'needsAction';
 
     var updated = Tasks.Tasks.update(match, FU_CFG.TASKLIST_ID, match.id);
@@ -329,7 +345,7 @@ function FU_upsertCalendarEventForItem_(item) {
   var task = {
     title: title,
     notes: desc + '\nJanela: 06:00 às 18:00',
-    due: FU_taskDueIso_(item.followUpDate),
+    due: FU_taskDueIso_(item.followUpDate, FU_pick_(item.row, ['Hora'])),
     status: 'needsAction'
   };
   var created = Tasks.Tasks.insert(task, FU_CFG.TASKLIST_ID);
@@ -339,6 +355,11 @@ function FU_upsertCalendarEventForItem_(item) {
 
 
 function FU_buildEventTitle_(item) {
+  if (item.sheetName === 'Agenda_Visitas') {
+    var tipoVisita = FU_pick_(item.row, ['Venda ou Cap?']) || 'Visita';
+    return 'Visita de ' + tipoVisita;
+  }
+
   var cfg = FU_getSheetConfig_(item.sheetName);
   var base = (cfg.title || item.sheetName || 'Registro');
   return 'Follow Up ' + base + ' - ' + item.recordId;
@@ -372,9 +393,16 @@ function FU_requireTasksApi_() {
   }
 }
 
-function FU_taskDueIso_(dateOnly) {
+function FU_taskDueIso_(dateOnly, hhmm) {
   var d = FU_startOfDay_(dateOnly);
-  return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0)).toISOString();
+  var hh = 0;
+  var mm = 0;
+  var m = String(hhmm || '').trim().match(/^(\d{1,2}):(\d{2})$/);
+  if (m) {
+    hh = Math.max(0, Math.min(23, Number(m[1])));
+    mm = Math.max(0, Math.min(59, Number(m[2])));
+  }
+  return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(), hh, mm, 0)).toISOString();
 }
 
 
@@ -390,6 +418,8 @@ function FU_buildEventDescription_(item) {
   lines.push('Origem: ' + item.sheetName);
   lines.push('ID Registro: ' + item.recordId);
   lines.push('Follow-up: ' + FU_fmtDate_(item.followUpDate));
+  var hora = FU_pick_(item.row, ['Hora']);
+  if (hora) lines.push('Hora: ' + hora);
   lines.push('Resumo: ' + FU_buildHumanLine_(item));
 
   if (item.details && item.details.base) {

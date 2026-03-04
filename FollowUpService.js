@@ -39,8 +39,10 @@ function FU_installDailyTrigger_6am() {
 function FU_dailyFollowUpJob_() {
   ensureSchema_();
   var itemsToday = FU_collectTodayFollowUpsDetailed_();
+  Logger.log('[FollowUp] Iniciando rotina diária. Itens do dia: ' + itemsToday.length);
   FU_sendDailyEmail_(itemsToday);
   var sync = FU_syncAllFutureFollowUpsToCalendar_();
+  Logger.log('[FollowUp] Rotina diária concluída. Sync calendário: ' + JSON.stringify(sync));
   return { ok: true, todayCount: itemsToday.length, calendar: sync };
 }
 
@@ -67,7 +69,11 @@ function FU_syncAllFutureFollowUpsToCalendar_() {
 
   items.forEach(function (item) {
     var r = FU_upsertCalendarEventForItem_(item);
-    if (!r || !r.ok) { failed++; return; }
+    if (!r || !r.ok) {
+      failed++;
+      Logger.log('[FollowUp] Falha ao sincronizar calendário: ' + FU_buildHumanLine_(item));
+      return;
+    }
     if (r.action === 'created') created++; else updated++;
   });
 
@@ -106,6 +112,10 @@ function FU_sendDailyEmail_(items) {
       html.push('</ul>');
     });
   }
+
+  var preview = items.slice(0, 20).map(function (it) { return FU_buildHumanLine_(it); }).join(' | ');
+  Logger.log('[FollowUp] Enviando e-mail para: ' + FU_CFG.EMAIL + ' | assunto: ' + subject + ' | qtd: ' + items.length);
+  if (preview) Logger.log('[FollowUp] Itens (preview): ' + preview);
 
   MailApp.sendEmail({
     to: FU_CFG.EMAIL,
@@ -253,10 +263,12 @@ function FU_upsertCalendarEventForItem_(item) {
   if (match) {
     match.setTitle(title);
     match.setDescription(desc);
+    Logger.log('[FollowUp] Evento atualizado: ' + title + ' | key: ' + item.key);
     return { ok: true, action: 'updated', id: match.getId() };
   }
 
   var ev = cal.createAllDayEvent(title, dayStart, { description: desc });
+  Logger.log('[FollowUp] Evento criado: ' + title + ' | key: ' + item.key);
   return { ok: true, action: 'created', id: ev.getId() };
 }
 

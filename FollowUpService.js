@@ -309,13 +309,17 @@ function FU_slimVisita_(visita) {
 }
 
 function FU_upsertCalendarEventForItem_(item) {
-  var startAt = FU_withTime_(item.followUpDate, 6, 0, 0);
-  var endAt = FU_withTime_(item.followUpDate, 18, 0, 0);
+  var window = FU_resolveTimeWindow_(item);
+  var startAt = window.startAt;
+  var endAt = window.endAt;
+  var dueIso = window.dueIso;
+  var hourLabel = window.hourLabel;
+  var windowLabel = window.windowLabel;
 
   var title = FU_buildEventTitle_(item);
   var desc = FU_buildEventDescription_(item);
 
-  Logger.log('[FollowUp] Payload task => list=' + FU_CFG.TASKLIST_ID + ' | key=' + item.key + ' | title=' + title + ' | due=' + FU_fmtDate_(item.followUpDate) + ' | hour=' + (FU_pick_(item.row, ['Hora']) || '-') + ' | start=06:00 | end=18:00');
+  Logger.log('[FollowUp] Payload task => list=' + FU_CFG.TASKLIST_ID + ' | key=' + item.key + ' | title=' + title + ' | due=' + FU_fmtDate_(item.followUpDate) + ' | hour=' + hourLabel + ' | start=' + FU_fmtHour_(startAt) + ' | end=' + FU_fmtHour_(endAt));
   Logger.log('[FollowUp] Payload descrição => ' + desc);
 
   var matches = FU_findTasksByKey_(item.key);
@@ -323,8 +327,8 @@ function FU_upsertCalendarEventForItem_(item) {
 
   if (match) {
     match.title = title;
-    match.notes = desc + '\nJanela: 06:00 às 18:00';
-    match.due = FU_taskDueIso_(item.followUpDate, FU_pick_(item.row, ['Hora']));
+    match.notes = desc + '\nJanela: ' + windowLabel;
+    match.due = dueIso;
     if (match.status !== 'completed') match.status = 'needsAction';
 
     var updated = Tasks.Tasks.update(match, FU_CFG.TASKLIST_ID, match.id);
@@ -344,13 +348,40 @@ function FU_upsertCalendarEventForItem_(item) {
 
   var task = {
     title: title,
-    notes: desc + '\nJanela: 06:00 às 18:00',
-    due: FU_taskDueIso_(item.followUpDate, FU_pick_(item.row, ['Hora'])),
+    notes: desc + '\nJanela: ' + windowLabel,
+    due: dueIso,
     status: 'needsAction'
   };
   var created = Tasks.Tasks.insert(task, FU_CFG.TASKLIST_ID);
   Logger.log('[FollowUp] Task criada: ' + title + ' | key: ' + item.key + ' | taskId=' + created.id);
   return { ok: true, action: 'created', id: created.id };
+}
+
+function FU_resolveTimeWindow_(item) {
+  var defaultStart = FU_withTime_(item.followUpDate, 6, 0, 0);
+  var defaultEnd = FU_withTime_(item.followUpDate, 18, 0, 0);
+  var rawHour = FU_pick_(item.row, ['Hora']);
+  var parsedHour = FU_parseTimeAny_(rawHour);
+
+  if (item.sheetName === 'Agenda_Visitas' && parsedHour) {
+    var start = FU_withTime_(item.followUpDate, parsedHour.hh, parsedHour.mm, 0);
+    var end = FU_withTime_(item.followUpDate, parsedHour.hh + 1, parsedHour.mm, 0);
+    return {
+      startAt: start,
+      endAt: end,
+      dueIso: FU_taskDueIsoByParts_(item.followUpDate, parsedHour.hh, parsedHour.mm),
+      hourLabel: parsedHour.label,
+      windowLabel: parsedHour.label + ' às ' + FU_fmtHour_(end)
+    };
+  }
+
+  return {
+    startAt: defaultStart,
+    endAt: defaultEnd,
+    dueIso: FU_taskDueIso_(item.followUpDate, rawHour),
+    hourLabel: parsedHour ? parsedHour.label : '-',
+    windowLabel: '06:00 às 18:00'
+  };
 }
 
 
@@ -395,14 +426,32 @@ function FU_requireTasksApi_() {
 
 function FU_taskDueIso_(dateOnly, hhmm) {
   var d = FU_startOfDay_(dateOnly);
-  var hh = 0;
-  var mm = 0;
-  var m = String(hhmm || '').trim().match(/^(\d{1,2}):(\d{2})$/);
-  if (m) {
-    hh = Math.max(0, Math.min(23, Number(m[1])));
-    mm = Math.max(0, Math.min(59, Number(m[2])));
-  }
+  var parsed = FU_parseTimeAny_(hhmm);
+  var hh = parsed ? parsed.hh : 0;
+  var mm = parsed ? parsed.mm : 0;
+  return FU_taskDueIsoByParts_(d, hh, mm);
+}
+
+function FU_taskDueIsoByParts_(dateOnly, hh, mm) {
+  var d = FU_startOfDay_(dateOnly);
   return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(), hh, mm, 0)).toISOString();
+}
+
+function FU_parseTimeAny_(v) {
+  var s = String(v || '').trim();
+  if (!s) return null;
+
+  var m = s.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+  if (!m) m = s.match(/^(\d{1,2})h(\d{2})$/i);
+  if (!m) return null;
+
+  var hh = Math.max(0, Math.min(23, Number(m[1])));
+  var mm = Math.max(0, Math.min(59, Number(m[2])));
+  return { hh: hh, mm: mm, label: (hh < 10 ? '0' : '') + hh + ':' + (mm < 10 ? '0' : '') + mm };
+}
+
+function FU_fmtHour_(d) {
+  return Utilities.formatDate(d, Session.getScriptTimeZone() || 'America/Sao_Paulo', 'HH:mm');
 }
 
 

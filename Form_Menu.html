@@ -110,7 +110,7 @@
             <button class="secondary" onclick="syncAgendaNow()">Atualizar agenda agora</button>
           </div>
           <div style="margin-top:10px; border:1px solid var(--line); border-radius:12px; overflow:hidden; height:620px;">
-            <iframe src="https://calendar.google.com/calendar/embed?src=gustavohenriquer598%40gmail.com&ctz=America%2FSao_Paulo&mode=AGENDA" style="border:0; width:100%; height:100%;" width="100%" height="100%" frameborder="0" scrolling="no"></iframe>
+            <iframe id="agendaDashFrame" src="https://calendar.google.com/calendar/embed?src=gustavohenriquer598%40gmail.com&ctz=America%2FSao_Paulo&mode=AGENDA" style="border:0; width:100%; height:100%;" width="100%" height="100%" frameborder="0" scrolling="no"></iframe>
           </div>
         </div></div>
       </div>
@@ -137,10 +137,20 @@
         google.script.run
           .withSuccessHandler(function(res){
             const c = (res && res.calendar) ? res.calendar : { total:0, created:0, updated:0, failed:0 };
+            refreshAgendaDashFrame();
+            refreshDashboard();
             toast(`Agenda sincronizada. Total: ${c.total||0} • Criados: ${c.created||0} • Atualizados: ${c.updated||0} • Falhas: ${c.failed||0}`);
           })
           .withFailureHandler(err => toast("Erro ao sincronizar agenda: " + (err.message || err)))
           .FU_syncAgendaNow_v1();
+      }
+
+      function refreshAgendaDashFrame(){
+        const frame = byId("agendaDashFrame");
+        if (!frame || !frame.src) return;
+        const base = frame.src.split("#")[0].replace(/[?&]r=\d+/, "");
+        const sep = base.indexOf("?") === -1 ? "?" : "&";
+        frame.src = `${base}${sep}r=${Date.now()}`;
       }
 
 

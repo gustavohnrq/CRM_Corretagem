@@ -35,7 +35,7 @@ function getDashboardData(filters){
     leadsCompradores, leadsVendedores, visitas, propostas, vendas, captacoes
   }, perfIndex);
 
-  const follow = readFollowUpBucketsByBoards_();
+  const follow = readFollowUpBucketsByBoards_({ leadsCompradores, captacoes, visitas, propostas, vendas });
 
   return {
     period: {
@@ -314,23 +314,24 @@ function brlValue_(n){
   return v.toLocaleString("pt-BR", { style:"currency", currency:"BRL" });
 }
 
-function readFollowUpBucketsByBoards_(){
+function readFollowUpBucketsByBoards_(data){
+  const d = data || {};
   const boards = {
-    leads: readFollowFromSheet_("Leads_Compradores", ["Nome"], ["Telefone"], ["Próximo Follow-up", "Próxima Data de Contato"]),
-    captacoes: readFollowFromSheet_("Fato_Captacao", ["Captadores", "Proprietario"], ["Captadores"], ["Próximo Follow-up", "Próxima Data de Contato"]),
-    visitas: readFollowFromSheet_("Fato_Visitas", ["Id_Visita"], ["Id_Imovel"], ["Próximo Follow-up", "Próxima Data de Contato"]),
-    propostas: readFollowFromSheet_("Fato_Proposta", ["Id_Proposta"], ["Id_Visita"], ["Próximo Follow-up", "Próxima Data de Contato"]),
-    vendas: readFollowFromSheet_("Fato_Venda", ["Id_Venda"], ["Id_Proposta"], ["Próximo Follow-up", "Próxima Data de Contato"])
+    leads: readFollowFromRows_(d.leadsCompradores, "Leads_Compradores", ["Nome"], ["Telefone"], ["Próximo Follow-up", "Próxima Data de Contato"]),
+    captacoes: readFollowFromRows_(d.captacoes, "Fato_Captacao", ["Captadores", "Proprietario"], ["Captadores"], ["Próximo Follow-up", "Próxima Data de Contato"]),
+    visitas: readFollowFromRows_(d.visitas, "Fato_Visitas", ["Id_Visita"], ["Id_Imovel"], ["Próximo Follow-up", "Próxima Data de Contato"]),
+    propostas: readFollowFromRows_(d.propostas, "Fato_Proposta", ["Id_Proposta"], ["Id_Visita"], ["Próximo Follow-up", "Próxima Data de Contato"]),
+    vendas: readFollowFromRows_(d.vendas, "Fato_Venda", ["Id_Venda"], ["Id_Proposta"], ["Próximo Follow-up", "Próxima Data de Contato"])
   };
   return boards;
 }
 
-function readFollowFromSheet_(sheetName, nameCandidates, phoneCandidates, dateCandidates){
-  const rows = readSheetObjects_(sheetName);
+function readFollowFromRows_(rows, sheetName, nameCandidates, phoneCandidates, dateCandidates){
+  const src = Array.isArray(rows) ? rows : readSheetObjects_(sheetName);
   const today = dsStartOfDay_(new Date());
   const plus7 = addDays_(today, 7);
 
-  const all = rows.map(r=>{
+  const all = src.map(r=>{
     const proximoRaw = pick_(r, dateCandidates);
     const dt = dsParseDateAny_(proximoRaw);
     return {
@@ -347,6 +348,7 @@ function readFollowFromSheet_(sheetName, nameCandidates, phoneCandidates, dateCa
     week: all.filter(x=>x.dt > today && x.dt < plus7).sort((a,b)=>a.dt-b.dt)
   };
 }
+
 
 function metricRow_(label, atual, min, max){
   let status = "red";

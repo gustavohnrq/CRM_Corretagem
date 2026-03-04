@@ -1,9 +1,33 @@
 <script>
   let APP_URL = null;
 
+  function prettifyToastMessage(msg){
+    let m = String(msg ?? "").trim();
+    if (!m) return m;
+
+    // Simplifica mensagens de sucesso removendo IDs longos/pouco úteis.
+    const isSuccessLike = /salvo|sucesso|atualizado|criado|exclu[ií]do|gerado|sincronizada|reservado/i.test(m);
+    if (isSuccessLike) {
+      m = m
+        .replace(/\s*\((?:ID|Id_Visita|id_Avaliacao|id)\s+[^)]+\)/gi, "")
+        .replace(/\s*\(\s*[0-9a-zA-Z\-]{8,}\s*\)\s*$/g, "")
+        .replace(/\b(ID|Id_Visita|id_Avaliacao|id)\s*[:#]?\s*[0-9a-zA-Z\-]{6,}/gi, "")
+        .replace(/\s{2,}/g, " ")
+        .trim();
+
+      // Caso clássico de reserva de visita
+      if (/^Id_Visita reservado:/i.test(String(msg || ""))) {
+        m = "Id_Visita reservado com sucesso.";
+      }
+    }
+
+    return m;
+  }
+
   function toast(msg){
-    console.log(msg);
-    alert(msg);
+    const pretty = prettifyToastMessage(msg);
+    console.log(pretty);
+    alert(pretty);
   }
 
   function ensureAppUrl(cb){

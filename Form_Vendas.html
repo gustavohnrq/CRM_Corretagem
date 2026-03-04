@@ -13,7 +13,7 @@
       <div class="btns"><button class="secondary" onclick="nav('Form_Menu')">← Menu</button></div>
     </div>
 
-    <div class="grid">
+    <div class="grid" style="grid-template-columns: 7fr 3fr;">
       <div class="card">
         <h3>Registros de Venda</h3>
         <div class="btns">
@@ -21,6 +21,11 @@
           <button class="ok" onclick="newRecord()">+ Novo</button>
         </div>
         <div class="list" id="list" style="margin-top:10px;"></div>
+
+        <div class="card" style="margin:12px 0 0 0;">
+          <h3>Detalhes do Registro Selecionado</h3>
+          <div id="registroDetailVenda" class="hint">Clique em uma venda na lista para ver os detalhes aqui.</div>
+        </div>
       </div>
 
       <div class="card">
@@ -66,6 +71,8 @@
               <input name="Data de Recebimento Comissão" id="Data_Recebimento_Comissao" placeholder="DD/MM/AAAA" />
             </div>
           </div>
+                  <label>Próximo Follow-up</label>
+          <input name="Próximo Follow-up" id="ProxFUVenda" placeholder="DD/MM/AAAA" />
         </form>
 
         <div class="btns">
@@ -100,15 +107,20 @@
 
         const p = ctx.proposta;
         const v = ctx.visita || {};
+        const fato = v.fato || {};
         const imv = v.imovel || {};
         const end = imv["Endereço"] || imv["Endereco"] || imv["Quadra/Endereço"] || "-";
         const clientes = (v.clientes_nomes || []).join(", ") || "-";
+        const bairro = imv["Bairro"] || "-";
+        const cidade = imv["Cidade"] || "-";
 
         el.innerHTML = `
           <div><b>Proposta:</b> ${escapeHtml(p["Id_Proposta"] || "-")} • <b>Status:</b> ${escapeHtml(p["status"] || "-")}</div>
           <div><b>Valor Proposta:</b> ${escapeHtml(String(p["Valor da Proposta"] || "-"))} • <b>Modalidade:</b> ${escapeHtml(String(p["Modalidade de Pagamento"] || "-"))}</div>
           <div><b>Visita:</b> ${escapeHtml(String(p["Id_Visita"] || "-"))} • <b>Data visita:</b> ${escapeHtml(v.data_visita || "-")}</div>
+          <div><b>Agendamento:</b> ${escapeHtml(v.id_agendamento || "-")} • <b>Captação:</b> ${escapeHtml(fato["Tipo_Captacao"] || "-")}</div>
           <div><b>Imóvel:</b> ${escapeHtml(v.id_imovel || "-")} • <b>Endereço:</b> ${escapeHtml(end)}</div>
+          <div><b>Bairro/Cidade:</b> ${escapeHtml(bairro)} / ${escapeHtml(cidade)}</div>
           <div><b>Clientes:</b> ${escapeHtml(clientes)}</div>
         `;
       }
@@ -126,12 +138,33 @@
         }).PV_listPropostasForSelect_v1();
       }
 
+
+      function renderRegistroDetailVenda(it){
+        const el = byId("registroDetailVenda");
+        if (!it) {
+          el.innerHTML = "Clique em uma venda na lista para ver os detalhes aqui.";
+          return;
+        }
+
+        el.innerHTML = `
+          <div><b>Venda:</b> ${escapeHtml(it.id || "-")} • <b>Data:</b> ${escapeHtml(it.raw["Data"] || "-")}</div>
+          <div><b>Valor Venda:</b> ${escapeHtml(String(it.raw["Valor da Venda"] || "-"))} • <b>Forma:</b> ${escapeHtml(String(it.raw["Forma de Pagamento"] || "-"))}</div>
+          <div><b>Proposta:</b> ${escapeHtml(it.raw["Id_Proposta"] || "-")} • <b>Valor proposta:</b> ${escapeHtml(String(it.enrich.propostaValor || "-"))}</div>
+          <div><b>Status/Modalidade:</b> ${escapeHtml(it.enrich.propostaStatus || "-")} • ${escapeHtml(it.enrich.propostaModalidade || "-")}</div>
+          <div><b>Visita:</b> ${escapeHtml(it.enrich.visitaId || "-")} • <b>Data visita:</b> ${escapeHtml(it.enrich.visitaData || "-")} • <b>Imóvel:</b> ${escapeHtml(it.enrich.idImovel || "-")}</div>
+          <div><b>Comissão:</b> ${escapeHtml(String(it.enrich.comissao || "-"))} • <b>Recebimento:</b> ${escapeHtml(it.enrich.dataRecebimentoComissao || "-")}</div>
+          <div><b>Clientes:</b> ${escapeHtml(it.enrich.clientes || "-")}</div>
+          <div><b>Endereço:</b> ${escapeHtml(it.enrich.endereco || "-")}</div>
+        `;
+      }
+
       function loadList(){
         google.script.run.withSuccessHandler(items => {
           const el = byId("list");
           el.innerHTML = "";
           if (!items || !items.length) {
             el.innerHTML = `<div class="hint">Sem vendas.</div>`;
+            renderRegistroDetailVenda(null);
             return;
           }
 
@@ -140,10 +173,12 @@
             d.className = "item";
             d.innerHTML = `
               <b>${escapeHtml(it.label)}</b>
-              <small>Visita ${escapeHtml(it.enrich.visitaId || "-")} • Proposta: ${escapeHtml(String(it.enrich.propostaValor || "-"))}</small>
+              <small>Visita ${escapeHtml(it.enrich.visitaId || "-")} • Data visita: ${escapeHtml(it.enrich.visitaData || "-")} • Imóvel ${escapeHtml(it.enrich.idImovel || "-")}</small>
+              <small>Proposta: ${escapeHtml(String(it.enrich.propostaValor || "-"))} • ${escapeHtml(it.enrich.propostaModalidade || "-")} • ${escapeHtml(it.enrich.propostaStatus || "-")}</small>
+              <small>Comissão: ${escapeHtml(String(it.enrich.comissao || "-"))} • Recebimento: ${escapeHtml(it.enrich.dataRecebimentoComissao || "-")}</small>
               <small>Clientes: ${escapeHtml(it.enrich.clientes || "-")} • ${escapeHtml(it.enrich.endereco || "-")}</small>
             `;
-            d.onclick = () => loadById(it.id);
+            d.onclick = () => { renderRegistroDetailVenda(it); loadById(it.id); };
             el.appendChild(d);
           });
         }).PV_listVendasDetailed_v1();
@@ -164,6 +199,7 @@
         const id = byId("Id_Proposta").value;
         if (!id) {
           byId("propostaCtx").innerHTML = "Selecione uma proposta para ver detalhes herdados.";
+        renderRegistroDetailVenda(null);
           return;
         }
         google.script.run.withSuccessHandler(renderPropostaCtx).PV_getPropostaContextById_v1(id);
@@ -173,6 +209,7 @@
         currentId = null;
         clearForm("form");
         byId("propostaCtx").innerHTML = "Selecione uma proposta para ver detalhes herdados.";
+        renderRegistroDetailVenda(null);
         google.script.run.withSuccessHandler(id => { byId("Id_Venda").value = id; }).PV_getNextIdVenda_v1();
       }
 
@@ -203,6 +240,7 @@
 
       byId("Id_Proposta").addEventListener("change", onChangeProposta);
       maskDDMMYYYY(byId("Data"));
+      maskDDMMYYYY(byId("ProxFUVenda"));
       maskDDMMYYYY(byId("Data_Recebimento_Comissao"));
       attachMoneyMask(byId("Valor_Venda"));
       attachMoneyMask(byId("Comissão"));

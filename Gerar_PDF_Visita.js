@@ -46,21 +46,21 @@ const PDF_CFG = {
 ========================= */
 function PDF_getFolderId_() {
   const props = PropertiesService.getScriptProperties();
-  const folderId = String(props.getProperty("PDF_VISITAS_FOLDER_ID") || "").trim();
-
-  if (!folderId) {
-    throw new Error(
-      'Defina a propriedade "PDF_VISITAS_FOLDER_ID" com o ID de uma pasta do Drive (já existente).'
-    );
-  }
+  const FALLBACK_FOLDER_ID = "1NfMPgTO6L_qSxFC3qn4CV9CIovNOJuls";
+  const folderIdProp = String(props.getProperty("PDF_VISITAS_FOLDER_ID") || "").trim();
+  const folderId = folderIdProp || FALLBACK_FOLDER_ID;
 
   // valida se a pasta existe (isso já exige Drive scope — mas é a validação correta)
   try {
     DriveApp.getFolderById(folderId);
   } catch (e) {
     throw new Error(
-      'Pasta inválida ou sem acesso. Verifique "PDF_VISITAS_FOLDER_ID".'
+      `Pasta inválida ou sem acesso. Verifique "PDF_VISITAS_FOLDER_ID" (atual: ${folderId}).`
     );
+  }
+
+  if (!folderIdProp && folderId) {
+    try { props.setProperty("PDF_VISITAS_FOLDER_ID", folderId); } catch (e) {}
   }
 
   return folderId;
@@ -190,9 +190,89 @@ function _pdf_calcNotaMedia_(avaliacoes) {
   return m;
 }
 
+
+function _pdf_getBackgroundDataUrl_() {
+  const BG_FOLDER_ID = "1fAzFGRc4KCnY2ou-jPhQ9hoiauQj0-Ce";
+  const props = PropertiesService.getScriptProperties();
+  const DEFAULT_BG_FILE_ID = "1hz0s32GBLXxQfZcetfIMrCuQS4gKGHmI";
+  const BG_FILE_ID_PROP = String(props.getProperty("PDF_VISITAS_BG_FILE_ID") || "").trim();
+  const BG_FILE_ID = BG_FILE_ID_PROP || DEFAULT_BG_FILE_ID;
+
+  const isImageMime_ = (mimeType) => String(mimeType || "").toLowerCase().trim().startsWith("image/");
+
+  try {
+    let chosen = null;
+
+    if (BG_FILE_ID) {
+      try {
+        const byId = DriveApp.getFileById(BG_FILE_ID);
+        if (isImageMime_(byId.getMimeType())) chosen = byId;
+      } catch (e) {}
+    }
+
+    if (!chosen) {
+      const folder = DriveApp.getFolderById(BG_FOLDER_ID);
+      const it = folder.getFiles();
+      let chosenTime = 0;
+
+      while (it.hasNext()) {
+        const f = it.next();
+        if (!isImageMime_(f.getMimeType())) continue;
+
+        const t = (f.getLastUpdated() || f.getDateCreated()).getTime();
+        if (t > chosenTime) {
+          chosen = f;
+          chosenTime = t;
+        }
+      }
+    }
+
+    if (!chosen) return "";
+
+    const originalBlob = chosen.getBlob();
+    if (!isImageMime_(originalBlob.getContentType()) && !isImageMime_(chosen.getMimeType())) return "";
+
+    // Conversão para PNG melhora compatibilidade do renderer HTML->PDF do Apps Script.
+    const pngBlob = originalBlob.getAs("image/png");
+    const b64 = Utilities.base64Encode(pngBlob.getBytes());
+    return `data:image/png;base64,${b64}`;
+  } catch (e) {
+    return "";
+  }
+}
+
+
+function _pdf_buildClientesPorVisita_() {
+  const S = PDF_CFG.SHEETS;
+  const K = PDF_CFG.KEYS;
+  const out = {};
+  const cleanNome_ = (s) => String(s || "").trim().replace(/^cliente\s+/i, "").trim();
+
+  const avs = _pdf_getAllObjects_(S.AVAL);
+  const clientes = _pdf_getAllObjects_(S.CLIENTES);
+  const cliMap = {};
+
+  clientes.forEach(c => {
+    const idc = String(c[K.CLI_ID] || "").trim();
+    if (!idc) return;
+    const nome = cleanNome_(c[K.CLI_NOME]);
+    cliMap[idc] = nome || idc;
+  });
+
+  avs.forEach(a => {
+    const idv = String(a[K.AVAL_ID_VISITA] || "").trim();
+    const idc = String(a[K.AVAL_ID_CLIENTE] || "").trim();
+    if (!idv || !idc) return;
+    if (!out[idv]) out[idv] = new Set();
+    out[idv].add(cliMap[idc] || idc);
+  });
+
+  return out;
+}
+
 /* =========================
    UI: lista p/ dropdown
-   (pedido seu: no detalhe só Id_Imovel e Data_Visita)
+   (Data_Visita + nomes dos clientes vinculados por Fato_Avaliacao)
 ========================= */
 function PDF_listVisitasForSelect_v1() {
   const S = PDF_CFG.SHEETS;
@@ -200,17 +280,19 @@ function PDF_listVisitasForSelect_v1() {
 
   const fatos = _pdf_getAllObjects_(S.FATO);
 
+  const clientesPorVisita = _pdf_buildClientesPorVisita_();
+
   const rows = fatos
     .map(f => {
       const idv = String(f[K.FATO_ID] || "").trim();
       if (!idv) return null;
 
-      const imovel = String(f[K.FATO_IMOVEL] || "").trim();
       const data = String(f[K.FATO_DATA] || "").trim();
+      const nomes = clientesPorVisita[idv] ? Array.from(clientesPorVisita[idv]).join(", ") : "(sem clientes)";
 
       return {
         id: idv,
-        label: `${imovel || "-"} • ${data || "-"}`
+        label: `${nomes} • Data: ${data || "-"}`
       };
     })
     .filter(Boolean);
@@ -269,11 +351,16 @@ function PDF_getVisitaPayload_v1(idVisita) {
     const info = cliMap[idc] || null;
     return {
       ...a,
-      Cliente_Nome: info ? info.nome : ""
+      Cliente_Nome: String(info ? info.nome : (idc || "")).replace(/^cliente\s+/i, "").trim()
     };
   });
 
   const nota_media = _pdf_calcNotaMedia_(avsEnriched);
+  const clientes_nomes = Array.from(new Set(
+    avsEnriched.map(a => String(a.Cliente_Nome || "").trim()).filter(Boolean)
+  ));
+
+  const bg_data_url = _pdf_getBackgroundDataUrl_();
 
   return {
     id_visita: idv,
@@ -287,7 +374,9 @@ function PDF_getVisitaPayload_v1(idVisita) {
     fato: fato,
     imovel: imovel,
     agenda: agenda,
-    avaliacoes: avsEnriched
+    avaliacoes: avsEnriched,
+    clientes_nomes,
+    bg_data_url
   };
 }
 
@@ -306,7 +395,7 @@ function PDF_generatePdfVisita_v1(idVisita) {
   const name = `Visita_${payload.id_visita}.pdf`;
   blob.setName(name);
 
-  const folder = DriveApp.getFolderById(PDF_getOrCreateFolderId_());
+  const folder = DriveApp.getFolderById(PDF_getFolderId_());
 
   // remove anterior com mesmo nome (evita duplicação)
   const existing = folder.getFilesByName(name);

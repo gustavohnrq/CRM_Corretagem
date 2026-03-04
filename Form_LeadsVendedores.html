@@ -3,6 +3,17 @@
   <head>
     <?!= include('Estilos'); ?>
     <?!= include('JsBase'); ?>
+    <style>
+      .grid70{
+        display:grid;
+        grid-template-columns: 7fr 3fr;
+        gap: 14px;
+        align-items:start;
+      }
+      @media (max-width: 980px){
+        .grid70{ grid-template-columns: 1fr; }
+      }
+    </style>
   </head>
   <body>
     <div class="topbar">
@@ -15,12 +26,27 @@
       </div>
     </div>
 
-    <div class="grid">
+    <div class="grid70">
       <div class="card">
         <h3>Registros</h3>
+
+        <div class="row" style="margin-top:8px;">
+          <div>
+            <label>Filtro: Status</label>
+            <input id="fStatus" list="dlFStatus" placeholder="(todos)" />
+            <datalist id="dlFStatus"></datalist>
+          </div>
+          <div>
+            <label>&nbsp;</label>
+            <input disabled placeholder=" " />
+          </div>
+        </div>
+
         <div class="btns">
-          <button class="secondary" onclick="loadList()">Atualizar lista</button>
+          <button class="secondary" onclick="applyFilters()">Aplicar filtro</button>
+          <button class="secondary" onclick="clearFilters()">Limpar filtro</button>
           <button class="ok" onclick="newRecord()">+ Novo</button>
+          <button class="secondary" onclick="reloadAll()">Atualizar</button>
         </div>
         <div style="margin-top:10px" class="list" id="list"></div>
       </div>
@@ -189,8 +215,51 @@
           .getDistinctValues(SHEET, ["Status","Tipo Imóvel","Exclusividade?","Quadra/Endereço"]);
       }
 
+      function fillFilterDatalist(dlId, items){
+        const dl = byId(dlId);
+        if (!dl) return;
+        dl.innerHTML = "";
+        (items || []).forEach(v=>{
+          const opt = document.createElement("option");
+          opt.value = v;
+          dl.appendChild(opt);
+        });
+      }
+
+      function loadFilterOptions(){
+        google.script.run
+          .withSuccessHandler(function(map){
+            fillFilterDatalist("dlFStatus", (map && map["Status"]) || []);
+          })
+          .withFailureHandler(function(err){
+            console.log("Filtro status error:", err);
+          })
+          .getDistinctValues(SHEET, ["Status"]);
+      }
+
+      function currentFilters(){
+        return {
+          status: String(byId("fStatus").value || "").trim()
+        };
+      }
+
+      function applyFilters(){
+        loadList(currentFilters());
+      }
+
+      function clearFilters(){
+        byId("fStatus").value = "";
+        loadList({});
+      }
+
+      function reloadAll(){
+        loadFilterOptions();
+        loadDatalists();
+        loadList(currentFilters());
+      }
+
       // ===== LISTA: usa funções exclusivas LVD_* =====
-      function loadList(){
+      function loadList(filters){
         google.script.run
           .withSuccessHandler(function(items){
             renderList("list", items, function(it){
@@ -205,12 +274,11 @@
                 })
                 .LVD_getById_v2(it.id);
             });
-            loadDatalists();
           })
           .withFailureHandler(function(err){
             toast("Erro ao atualizar lista: " + (err.message || err));
           })
-          .LVD_listForPanel_v2();
+          .LVD_listForPanelFiltered_v1(filters || {});
       }
 
       function newRecord(){ currentId=null; clearForm("form"); }
@@ -225,7 +293,7 @@
             .withSuccessHandler(function(res){
               toast("Salvo: " + res.action + " (" + res.id + ")");
               currentId = res.id;
-              loadList();
+              loadList(currentFilters());
             })
             .withFailureHandler(function(err){
               toast("Erro ao salvar: " + (err.message || err));
@@ -246,7 +314,7 @@
         google.script.run
           .withSuccessHandler(function(res){
             toast(res.ok ? "Excluído." : ("Não excluído: " + res.message));
-            newRecord(); loadList();
+            newRecord(); loadList(currentFilters());
           })
           .withFailureHandler(function(err){
             toast("Erro ao excluir: " + (err.message || err));
@@ -259,7 +327,9 @@
       maskDDMMYYYY(document.getElementById("Último Contato"));
       maskDDMMYYYY(document.getElementById("Próximo Follow-up"));
 
-      loadList();
+      loadFilterOptions();
+      loadDatalists();
+      loadList({});
     </script>
   </body>
 </html>

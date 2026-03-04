@@ -22,6 +22,10 @@ const CFG = {
     "Form_LeadsVendedores": true,
     "Form_AgendarVisita": true,
     "Form_RegistrarVisita": true,
+    "Form_Proposta": true,
+    "Form_Vendas": true,
+    "Form_Captacao": true,
+    "Form_PDFVisita": true,
     "Form_PDFVisitas": true
   }
 };
@@ -151,10 +155,22 @@ function parseAnyDate_(v) {
   return null;
 }
 
+
+function normalizePageName_(page) {
+  const raw = String(page || "").trim().replace(/^['"]+|['"]+$/g, "");
+  const aliases = {
+    "Form_PDFVisitas": "Form_PDFVisita",
+    "Form_Venda": "Form_Vendas",
+    "Form_Propostas": "Form_Proposta"
+  };
+  return aliases[raw] || raw;
+}
+
 function doGet(e) {
   ensureSchema_();
 
-  const page = (e && e.parameter && e.parameter.page) ? e.parameter.page : CFG.DEFAULT_PAGE;
+  const requested = (e && e.parameter && e.parameter.page) ? e.parameter.page : CFG.DEFAULT_PAGE;
+  const page = normalizePageName_(requested);
   const safePage = CFG.PAGES[page] ? page : CFG.DEFAULT_PAGE;
 
   return HtmlService
@@ -198,43 +214,95 @@ function openWebApp_() {
   SpreadsheetApp.getUi().showModalDialog(html, "Abrir CRM Corretagem");
 }
 
+
+function ensureColumnIfMissing_(sheetName, colName) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sh = ss.getSheetByName(sheetName);
+  if (!sh) return;
+  const lc = sh.getLastColumn();
+  if (lc < 1) return;
+  const headers = sh.getRange(1,1,1,lc).getDisplayValues()[0].map(h=>String(h||"").trim());
+  if (headers.includes(colName)) return;
+  sh.getRange(1, lc+1).setValue(colName);
+  sh.getRange(1,1,1,lc+1).setFontWeight("bold");
+}
+
+function ensureCaptacaoSchema_(){
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sh = ss.getSheetByName("Fato_Captacao");
+  const headers = [
+    "Código","Captadores","Proprietario","Tipo","Quartos","Valor","Endereco","Bairro","PublicacaoNaInternet","Exclusivo","Detalhes","Próximo Follow-up","DataCadastro"
+  ];
+  if (!sh) sh = ss.insertSheet("Fato_Captacao");
+  const lc = sh.getLastColumn();
+  const current = lc>0 ? sh.getRange(1,1,1,lc).getDisplayValues()[0].map(h=>String(h||"").trim()) : [];
+  const eq = current.length===headers.length && headers.every((h,i)=>h===current[i]);
+  if (!eq){
+    sh.clear();
+    sh.getRange(1,1,1,headers.length).setValues([headers]);
+    sh.getRange(1,1,1,headers.length).setFontWeight("bold");
+  }
+}
+
 /**
  * ✅ Garante que a aba "Agenda_Visitas" tenha coluna "id" (minúsculo) na coluna A.
  * - Se existir "id" OU "ID", não altera.
  * - Se não existir, cria e preenche ids sequenciais.
  */
-function ensureSchema_() {
+var __SCHEMA_ENSURED__ = false;
+
+function ensureSchema_(force) {
+  if (__SCHEMA_ENSURED__ && !force) return;
+
+  if (typeof ensurePropostaVendaSchema_ === "function") {
+    try { ensurePropostaVendaSchema_(); } catch (e) {}
+  }
+  try { ensureCaptacaoSchema_(); } catch(e) {}
+
+  // colunas de apoio em abas relacionadas (independente de Agenda_Visitas existir)
+  ensureColumnIfMissing_("Fato_Visitas", "Tipo_Visita");
+  ensureColumnIfMissing_("Fato_Visitas", "Próximo Follow-up");
+  ensureColumnIfMissing_("Fato_Proposta", "Próximo Follow-up");
+  ensureColumnIfMissing_("Fato_Venda", "Próximo Follow-up");
+  ensureColumnIfMissing_("Leads_Compradores", "Próximo Follow-up");
+  ensureColumnIfMissing_("Leads_Vendedores", "Próximo Follow-up");
+
+  // ajuste específico de Agenda_Visitas: garantir coluna id na A
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sh = ss.getSheetByName("Agenda_Visitas");
-  if (!sh) return;
 
-  const lc = sh.getLastColumn();
-  if (lc < 1) return;
+  if (sh) {
+    const lc = sh.getLastColumn();
+    if (lc >= 1) {
+      const headers = sh.getRange(1, 1, 1, lc).getValues()[0].map(h => String(h || "").trim());
+      const hasIdLower = headers.includes("id");
+      const hasIdUpper = headers.includes("ID");
 
-  const headers = sh.getRange(1, 1, 1, lc).getValues()[0].map(h => String(h || "").trim());
-  const hasIdLower = headers.includes("id");
-  const hasIdUpper = headers.includes("ID");
-  if (hasIdLower || hasIdUpper) return;
+      if (!hasIdLower && !hasIdUpper) {
+        sh.insertColumnBefore(1);
+        sh.getRange(1, 1).setValue("id");
+        sh.getRange(1, 1, 1, sh.getLastColumn()).setFontWeight("bold");
 
-  sh.insertColumnBefore(1);
-  sh.getRange(1, 1).setValue("id");
-  sh.getRange(1, 1, 1, sh.getLastColumn()).setFontWeight("bold");
+        const lr = sh.getLastRow();
+        if (lr >= 2) {
+          const idRange = sh.getRange(2, 1, lr - 1, 1);
+          const ids = idRange.getValues();
+          let next = 1;
 
-  const lr = sh.getLastRow();
-  if (lr >= 2) {
-    const idRange = sh.getRange(2, 1, lr - 1, 1);
-    const ids = idRange.getValues();
-    let next = 1;
-
-    for (let i = 0; i < ids.length; i++) {
-      if (!ids[i][0]) ids[i][0] = next++;
-      else {
-        const n = Number(ids[i][0]);
-        if (!isNaN(n) && isFinite(n)) next = Math.max(next, n + 1);
+          for (let i = 0; i < ids.length; i++) {
+            if (!ids[i][0]) ids[i][0] = next++;
+            else {
+              const n = Number(ids[i][0]);
+              if (!isNaN(n) && isFinite(n)) next = Math.max(next, n + 1);
+            }
+          }
+          idRange.setValues(ids);
+        }
       }
     }
-    idRange.setValues(ids);
   }
+
+  __SCHEMA_ENSURED__ = true;
 }
 
 /* ===============================
@@ -244,7 +312,16 @@ function ensureSchema_() {
 function getMeta(sheetName) { return DataService.getMeta(sheetName); }
 function listRecords(sheetName, idCol, labelCols) { return DataService.listRecords(sheetName, idCol, labelCols); }
 function getById(sheetName, idCol, idVal) { return DataService.getById(sheetName, idCol, idVal); }
-function upsertById(sheetName, idCol, obj) { return DataService.upsertById(sheetName, idCol, obj); }
+function upsertById(sheetName, idCol, obj) {
+  const res = DataService.upsertById(sheetName, idCol, obj);
+  try {
+    if (typeof FU_syncFollowUpForRecord_ === "function") {
+      const idVal = String((res && res.id) || obj[idCol] || "").trim();
+      FU_syncFollowUpForRecord_(sheetName, idCol, idVal, obj);
+    }
+  } catch (e) {}
+  return res;
+}
 function deleteById(sheetName, idCol, idVal) { return DataService.deleteById(sheetName, idCol, idVal); }
 function getNextNumericId(sheetName, idCol) { return DataService.getNextNumericId(sheetName, idCol); }
 function listClientesForSelect() { return DataService.listClientesForSelect(); }
@@ -354,6 +431,74 @@ function BC_listForPanel_v2() {
   data.forEach(r => {
     const id = r[idxID];
     if (id === "" || id === null || id === undefined) return;
+
+    const nome = idxNome !== undefined ? String(r[idxNome] ?? "").trim() : "";
+    let tel = idxTel !== undefined ? r[idxTel] : "";
+    const email = idxEmail !== undefined ? String(r[idxEmail] ?? "").trim() : "";
+
+    if (typeof tel === "number") tel = String(Math.trunc(tel));
+    tel = String(tel ?? "").trim();
+
+    out.push({
+      id: String(id).trim(),
+      label: [nome || "(sem nome)", tel || "(sem tel)", email || "(sem email)"].join(" • ")
+    });
+  });
+
+  out.sort((a, b) => {
+    const na = Number(a.id), nb = Number(b.id);
+    if (!isNaN(na) && !isNaN(nb)) return nb - na;
+    return String(b.id).localeCompare(String(a.id));
+  });
+
+  return out;
+}
+
+/**
+ * Base_Clientes - lista para painel com filtros
+ * filtros suportados: "Prazo de Compra" e "Status Atual"
+ */
+function BC_listForPanelFiltered_v1(filters) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sh = ss.getSheetByName("Base_Clientes");
+  if (!sh) throw new Error('Aba "Base_Clientes" não existe.');
+
+  const lr = sh.getLastRow();
+  const lc = sh.getLastColumn();
+  if (lr < 2 || lc < 1) return [];
+
+  const headers = sh.getRange(1, 1, 1, lc).getValues()[0];
+  const normToIdx = {};
+  headers.forEach((h, i) => {
+    const key = _normHeader_(h);
+    if (key) normToIdx[key] = i;
+  });
+
+  const idxID = normToIdx["id"];
+  const idxNome = normToIdx[_normHeader_("Nome Completo")];
+  const idxTel = normToIdx[_normHeader_("Telefone")];
+  const idxEmail = normToIdx[_normHeader_("Email")];
+  const idxPrazo = normToIdx[_normHeader_("Prazo de Compra")];
+  const idxStatus = normToIdx[_normHeader_("Status Atual")];
+
+  if (idxID === undefined) throw new Error('Base_Clientes: coluna "ID" não encontrada (nem variação).');
+
+  const f = filters || {};
+  const fPrazo = String(f.prazoCompra || "").trim().toLowerCase();
+  const fStatus = String(f.statusAtual || "").trim().toLowerCase();
+
+  const data = sh.getRange(2, 1, lr - 1, lc).getValues();
+  const out = [];
+
+  data.forEach(r => {
+    const id = r[idxID];
+    if (id === "" || id === null || id === undefined) return;
+
+    const prazo = idxPrazo !== undefined ? String(r[idxPrazo] ?? "").trim() : "";
+    const status = idxStatus !== undefined ? String(r[idxStatus] ?? "").trim() : "";
+
+    if (fPrazo && prazo.toLowerCase() !== fPrazo) return;
+    if (fStatus && status.toLowerCase() !== fStatus) return;
 
     const nome = idxNome !== undefined ? String(r[idxNome] ?? "").trim() : "";
     let tel = idxTel !== undefined ? r[idxTel] : "";
@@ -523,17 +668,23 @@ function LC_getById_v2(telefoneVal) {
   if (idxTel === undefined) throw new Error('Leads_Compradores: coluna "Telefone" não encontrada.');
 
   const data = sh.getRange(2, 1, lr - 1, lc).getValues();
-  const target = String(telefoneVal ?? "").trim();
+
+  const normalizePhoneKey_ = (v) => {
+    let raw = v;
+    if (typeof raw === "number") raw = String(Math.trunc(raw));
+    raw = String(raw ?? "").trim();
+    const digits = raw.replace(/\D/g, "");
+    return digits || raw;
+  };
+
+  const target = normalizePhoneKey_(telefoneVal);
 
   const isDateObj = (v) => Object.prototype.toString.call(v) === "[object Date]" && !isNaN(v.getTime());
   const pad2 = (n) => String(n).padStart(2, "0");
   const fmtDDMMYYYY = (d) => `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)}/${d.getFullYear()}`;
 
   for (const r of data) {
-    let tel = r[idxTel];
-    if (typeof tel === "number") tel = String(Math.trunc(tel));
-    tel = String(tel ?? "").trim();
-
+    const tel = normalizePhoneKey_(r[idxTel]);
     if (tel !== target) continue;
 
     const obj = {};
@@ -544,7 +695,9 @@ function LC_getById_v2(telefoneVal) {
       let v = r[i];
 
       // telefone number -> string
-      if (_normHeader_(keyRaw) === "telefone" && typeof v === "number") v = String(Math.trunc(v));
+      if (_normHeader_(keyRaw) === "telefone") {
+        v = normalizePhoneKey_(v);
+      }
 
       // campos de data -> DD/MM/AAAA se vier Date
       const k = _normHeader_(keyRaw);
@@ -601,6 +754,63 @@ function LVD_listForPanel_v2() {
     const nome = idxNome !== undefined ? String(r[idxNome] ?? "").trim() : "";
     const quadra = idxQuadra !== undefined ? String(r[idxQuadra] ?? "").trim() : "";
     const status = idxStatus !== undefined ? String(r[idxStatus] ?? "").trim() : "";
+
+    const label = [
+      nome || "(sem nome)",
+      quadra || "(sem endereço)",
+      status || "(sem status)"
+    ].join(" • ");
+
+    out.push({ id: tel, label });
+  });
+
+  out.sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
+  return out;
+}
+
+/**
+ * Form_LeadsVendedores - lista com filtro por Status
+ */
+function LVD_listForPanelFiltered_v1(filters) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sh = ss.getSheetByName("Leads_Vendedores");
+  if (!sh) throw new Error('Aba "Leads_Vendedores" não existe.');
+
+  const lr = sh.getLastRow();
+  const lc = sh.getLastColumn();
+  if (lr < 2 || lc < 1) return [];
+
+  const headers = sh.getRange(1, 1, 1, lc).getValues()[0];
+  const normToIdx = {};
+  headers.forEach((h, i) => {
+    const key = _normHeader_(h);
+    if (key) normToIdx[key] = i;
+  });
+
+  const idxTel = normToIdx[_normHeader_("Telefone")];
+  const idxNome = normToIdx[_normHeader_("Nome Proprietário")];
+  const idxQuadra = normToIdx[_normHeader_("Quadra/Endereço")];
+  const idxStatus = normToIdx[_normHeader_("Status")];
+  if (idxTel === undefined) throw new Error('Leads_Vendedores: coluna "Telefone" não encontrada.');
+
+  const f = filters || {};
+  const statusFilter = String(f.status || "").trim().toLowerCase();
+
+  const data = sh.getRange(2, 1, lr - 1, lc).getValues();
+  const out = [];
+
+  data.forEach(r => {
+    let tel = r[idxTel];
+    if (tel === "" || tel === null || tel === undefined) return;
+
+    if (typeof tel === "number") tel = String(Math.trunc(tel));
+    tel = String(tel).trim();
+
+    const nome = idxNome !== undefined ? String(r[idxNome] ?? "").trim() : "";
+    const quadra = idxQuadra !== undefined ? String(r[idxQuadra] ?? "").trim() : "";
+    const status = idxStatus !== undefined ? String(r[idxStatus] ?? "").trim() : "";
+
+    if (statusFilter && status.toLowerCase() !== statusFilter) return;
 
     const label = [
       nome || "(sem nome)",
@@ -1121,6 +1331,105 @@ function RV_listFatosForPanel_v2() {
   const idxIdVis = normToIdx["id_visita"];
   const idxData  = normToIdx[_normHeader_("Data_Visita")];
   const idxImv   = normToIdx[_normHeader_("Id_Imovel")];
+  const idxProp  = normToIdx[_normHeader_("Proposta")];
+  if (idxIdVis === undefined) throw new Error('Fato_Visitas: coluna "Id_Visita" não encontrada.');
+
+  const parseNum_ = (v) => {
+    if (typeof v === "number") return isFinite(v) ? v : null;
+    const s = String(v ?? "").trim();
+    if (!s) return null;
+    const raw = s.replace(/[R$\s]/g, "");
+    let n = NaN;
+    if (raw.includes(",")) {
+      n = Number(raw.replace(/\./g, "").replace(",", "."));
+    } else {
+      n = Number(raw);
+    }
+    return isNaN(n) ? null : n;
+  };
+
+  const clientesMap = {};
+  try {
+    const shCli = ss.getSheetByName("Base_Clientes");
+    if (shCli) {
+      const lrCli = shCli.getLastRow();
+      const lcCli = shCli.getLastColumn();
+      if (lrCli >= 2 && lcCli >= 1) {
+        const hCli = shCli.getRange(1, 1, 1, lcCli).getValues()[0];
+        const mCli = {};
+        hCli.forEach((h, i) => {
+          const k = _normHeader_(h);
+          if (k) mCli[k] = i;
+        });
+        const idxCliId = mCli["id"];
+        const idxCliNome = mCli[_normHeader_("Nome Completo")];
+        if (idxCliId !== undefined && idxCliNome !== undefined) {
+          const dCli = shCli.getRange(2, 1, lrCli - 1, lcCli).getValues();
+          dCli.forEach(r => {
+            const id = String(r[idxCliId] ?? "").trim();
+            const nome = String(r[idxCliNome] ?? "").trim();
+            if (id) clientesMap[id] = nome || ("Cliente " + id);
+          });
+        }
+      }
+    }
+  } catch (e) {}
+
+  const aggByVisita = {};
+  try {
+    const shAv = ss.getSheetByName("Fato_Avaliacao");
+    if (shAv) {
+      const lrAv = shAv.getLastRow();
+      const lcAv = shAv.getLastColumn();
+      if (lrAv >= 2 && lcAv >= 1) {
+        const hAv = shAv.getRange(1, 1, 1, lcAv).getValues()[0];
+        const mAv = {};
+        hAv.forEach((h, i) => {
+          const k = _normHeader_(h);
+          if (k) mAv[k] = i;
+        });
+
+        const idxAvVis = mAv[_normHeader_("Id_Visita")];
+        const idxAvCli = mAv[_normHeader_("Id_Cliente")];
+        const idxAvNota = mAv[_normHeader_("Nota_Geral")];
+        const idxAvPreco = mAv[_normHeader_("Preco_N10")];
+
+        if (idxAvVis !== undefined) {
+          const dAv = shAv.getRange(2, 1, lrAv - 1, lcAv).getValues();
+          dAv.forEach(r => {
+            const idv = String(r[idxAvVis] ?? "").trim();
+            if (!idv) return;
+
+            if (!aggByVisita[idv]) {
+              aggByVisita[idv] = {
+                clientes: new Set(),
+                sumNota: 0,
+                cntNota: 0,
+                sumPreco: 0,
+                cntPreco: 0
+              };
+            }
+            const a = aggByVisita[idv];
+
+            if (idxAvCli !== undefined) {
+              const idc = String(r[idxAvCli] ?? "").trim();
+              if (idc) a.clientes.add(idc);
+            }
+
+            if (idxAvNota !== undefined) {
+              const n = parseNum_(r[idxAvNota]);
+              if (n !== null) { a.sumNota += n; a.cntNota++; }
+            }
+
+            if (idxAvPreco !== undefined) {
+              const p = parseNum_(r[idxAvPreco]);
+              if (p !== null) { a.sumPreco += p; a.cntPreco++; }
+            }
+          });
+        }
+      }
+    }
+  } catch (e) {}
 
   const range = sh.getRange(2, 1, lr - 1, lc);
   const values = range.getValues();
@@ -1131,11 +1440,29 @@ function RV_listFatosForPanel_v2() {
     const idv = values[i][idxIdVis];
     if (idv === "" || idv === null || idv === undefined) continue;
 
+    const idVisita = String(idv).trim();
     const d  = idxData !== undefined ? String(disp[i][idxData] ?? "").trim() : "";
     const im = idxImv  !== undefined ? String(values[i][idxImv] ?? "").trim() : "";
+    const proposta = idxProp !== undefined ? String(values[i][idxProp] ?? "").trim() : "";
 
-    const label = `Imóvel ${im || "-"} • ${d || "(sem data)"}`;
-    out.push({ id: String(idv).trim(), label });
+    const agg = aggByVisita[idVisita] || null;
+    const clientes = agg
+      ? Array.from(agg.clientes).map(idc => clientesMap[idc] || ("Cliente " + idc))
+      : [];
+
+    const mediaNotaGeral = (agg && agg.cntNota > 0) ? (agg.sumNota / agg.cntNota) : null;
+    const mediaPrecoN10 = (agg && agg.cntPreco > 0) ? (agg.sumPreco / agg.cntPreco) : null;
+
+    const label = `Data ${d || "(sem data)"} • Imóvel ${im || "-"}`;
+    out.push({
+      id: idVisita,
+      label,
+      dataVisita: d,
+      proposta,
+      clientes,
+      mediaNotaGeral,
+      mediaPrecoN10
+    });
   }
 
   out.sort((a, b) => Number(b.id) - Number(a.id));
@@ -1231,13 +1558,22 @@ function RV_upsertFatoVisita_v2(obj) {
   // garante Id_Visita gravado
   writeRow[idxIdVis] = idv;
 
+  let result;
   if (rowIndex === -1) {
     sh.appendRow(writeRow);
-    return { ok: true, action: "created", id: idv };
+    result = { ok: true, action: "created", id: idv };
   } else {
     sh.getRange(rowIndex, 1, 1, lc).setValues([writeRow]);
-    return { ok: true, action: "updated", id: idv };
+    result = { ok: true, action: "updated", id: idv };
   }
+
+  try {
+    if (typeof FU_syncFollowUpForRecord_ === "function") {
+      FU_syncFollowUpForRecord_("Fato_Visitas", "Id_Visita", idv, obj);
+    }
+  } catch (e) {}
+
+  return result;
 }
 
 // ======================================================
@@ -1245,20 +1581,103 @@ function RV_upsertFatoVisita_v2(obj) {
 // ======================================================
 
 function PDF_getOrCreateFolderId_() {
+  // Mantido por compatibilidade com versões antigas do projeto.
+  // ⚠️ Não usar getRootFolder para evitar exigência de escopo adicional.
+  return PDF_getFolderId_();
+}
+
+function PDF_getFolderId_() {
   const props = PropertiesService.getScriptProperties();
-  let folderId = props.getProperty("PDF_VISITAS_FOLDER_ID");
-  if (folderId) {
-    try { DriveApp.getFolderById(folderId); return folderId; } catch (e) {}
+  const FALLBACK_FOLDER_ID = "1NfMPgTO6L_qSxFC3qn4CV9CIovNOJuls";
+  const folderIdProp = String(props.getProperty("PDF_VISITAS_FOLDER_ID") || "").trim();
+  const folderId = folderIdProp || FALLBACK_FOLDER_ID;
+
+  try {
+    DriveApp.getFolderById(folderId);
+  } catch (e) {
+    throw new Error(`Pasta inválida ou sem acesso. Verifique "PDF_VISITAS_FOLDER_ID" (atual: ${folderId}).`);
   }
 
-  const root = DriveApp.getRootFolder();
-  const name = "CRM_Corretagem_PDF_Visitas";
-  const it = root.getFoldersByName(name);
-  const folder = it.hasNext() ? it.next() : root.createFolder(name);
+  if (!folderIdProp && folderId) {
+    try { props.setProperty("PDF_VISITAS_FOLDER_ID", folderId); } catch (e) {}
+  }
 
-  folderId = folder.getId();
-  props.setProperty("PDF_VISITAS_FOLDER_ID", folderId);
   return folderId;
+}
+
+function _PDF_buildClientesPorVisita_() {
+  const out = {};
+  const cleanNome_ = (s) => String(s || "").trim().replace(/^cliente\s+/i, "").trim();
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const shA = ss.getSheetByName("Fato_Avaliacao");
+    const shC = ss.getSheetByName("Base_Clientes");
+    if (!shA || !shC) return out;
+
+    const lrA = shA.getLastRow(), lcA = shA.getLastColumn();
+    const lrC = shC.getLastRow(), lcC = shC.getLastColumn();
+    if (lrA < 2 || lcA < 1 || lrC < 2 || lcC < 1) return out;
+
+    const hA = shA.getRange(1, 1, 1, lcA).getValues()[0];
+    const hC = shC.getRange(1, 1, 1, lcC).getValues()[0];
+    const mA = {}, mC = {};
+    hA.forEach((h, i) => { const k = _normHeader_(h); if (k) mA[k] = i; });
+    hC.forEach((h, i) => { const k = _normHeader_(h); if (k) mC[k] = i; });
+
+    const idxAVis = mA[_normHeader_("Id_Visita")];
+    const idxACli = mA[_normHeader_("Id_Cliente")];
+    const idxCID = mC["id"];
+    const idxNome = mC[_normHeader_("Nome Completo")];
+    if ([idxAVis, idxACli, idxCID, idxNome].some(x => x === undefined)) return out;
+
+    const cliMap = {};
+    shC.getRange(2, 1, lrC - 1, lcC).getValues().forEach(r => {
+      const id = String(r[idxCID] ?? "").trim();
+      if (!id) return;
+      const nome = cleanNome_(r[idxNome]);
+      cliMap[id] = nome || id;
+    });
+
+    shA.getRange(2, 1, lrA - 1, lcA).getValues().forEach(r => {
+      const idv = String(r[idxAVis] ?? "").trim();
+      const idc = String(r[idxACli] ?? "").trim();
+      if (!idv || !idc) return;
+      if (!out[idv]) out[idv] = new Set();
+      out[idv].add(cliMap[idc] || idc);
+    });
+  } catch (e) {}
+  return out;
+}
+
+function _PDF_getBackgroundDataUrl_() {
+  const BG_FOLDER_ID = "1fAzFGRc4KCnY2ou-jPhQ9hoiauQj0-Ce";
+  try {
+    const folder = DriveApp.getFolderById(BG_FOLDER_ID);
+    const it = folder.getFiles();
+    let chosen = null;
+    let chosenTime = 0;
+
+    while (it.hasNext()) {
+      const f = it.next();
+      let ct = "";
+      try { ct = String(f.getMimeType() || "").toLowerCase(); } catch (e) { ct = ""; }
+      if (!ct.startsWith("image/")) continue;
+
+      const t = (f.getLastUpdated() || f.getDateCreated()).getTime();
+      if (t > chosenTime) {
+        chosen = f;
+        chosenTime = t;
+      }
+    }
+
+    if (!chosen) return "";
+    const blob = chosen.getBlob();
+    const ct = blob.getContentType() || "image/png";
+    const b64 = Utilities.base64Encode(blob.getBytes());
+    return `data:${ct};base64,${b64}`;
+  } catch (e) {
+    return "";
+  }
 }
 
 function PDF_listVisitasForSelect_v1() {
@@ -1279,6 +1698,7 @@ function PDF_listVisitasForSelect_v1() {
   const idxIdVis = normToIdx["id_visita"];
   const idxData  = normToIdx[_normHeader_("Data_Visita")];
   const idxImv   = normToIdx[_normHeader_("Id_Imovel")];
+  const clientesPorVisita = _PDF_buildClientesPorVisita_();
 
   if (idxIdVis === undefined) throw new Error('Fato_Visitas: coluna "Id_Visita" não encontrada.');
 
@@ -1294,7 +1714,10 @@ function PDF_listVisitasForSelect_v1() {
     const data = idxData !== undefined ? String(disp[i][idxData] ?? "").trim() : "";
     const imv  = idxImv  !== undefined ? String(values[i][idxImv] ?? "").trim() : "";
 
-    const label = `Visita ${String(idv).trim()} • ${imv || "-"} • ${data || "(sem data)"}`;
+    const nomes = clientesPorVisita[String(idv).trim()]
+      ? Array.from(clientesPorVisita[String(idv).trim()]).join(", ")
+      : "(sem clientes)";
+    const label = `${nomes} • Data: ${data || "(sem data)"}`;
     out.push({ id: String(idv).trim(), label });
   }
 
@@ -1331,19 +1754,45 @@ function PDF_getVisitaPayload_v1(idVisita) {
 
   const clientesMap = {};
   try {
-    const lista = DataService.listClientesForSelect() || [];
-    lista.forEach(it => { clientesMap[String(it.id).trim()] = it.label; });
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const shCli = ss.getSheetByName("Base_Clientes");
+    if (shCli) {
+      const lr = shCli.getLastRow();
+      const lc = shCli.getLastColumn();
+      if (lr >= 2 && lc >= 1) {
+        const headers = shCli.getRange(1, 1, 1, lc).getValues()[0];
+        const map = {};
+        headers.forEach((h, i) => { const k = _normHeader_(h); if (k) map[k] = i; });
+        const idxId = map["id"];
+        const idxNome = map[_normHeader_("Nome Completo")];
+        if (idxId !== undefined && idxNome !== undefined) {
+          shCli.getRange(2, 1, lr - 1, lc).getValues().forEach(r => {
+            const id = String(r[idxId] ?? "").trim();
+            if (!id) return;
+            const nome = String(r[idxNome] ?? "").trim().replace(/^cliente\s+/i, "").trim();
+            clientesMap[id] = nome || id;
+          });
+        }
+      }
+    }
   } catch (e) {}
 
   avaliacoes = (avaliacoes || []).map(a => {
     const idc = String(a["Id_Cliente"] || "").trim();
-    return { ...a, Cliente_Nome: clientesMap[idc] || (idc ? ("Cliente " + idc) : "") };
+    const nome = String(clientesMap[idc] || idc || "").replace(/^cliente\s+/i, "").trim();
+    return { ...a, Cliente_Nome: nome };
   });
 
   const notasGerais = avaliacoes
     .map(a => Number(a["Nota_Geral"]))
     .filter(n => !isNaN(n));
   const notaMedia = notasGerais.length ? (notasGerais.reduce((s, n) => s + n, 0) / notasGerais.length) : null;
+
+  const clientesNomes = Array.from(new Set(
+    avaliacoes
+      .map(a => String(a.Cliente_Nome || "").trim())
+      .filter(Boolean)
+  ));
 
   return {
     id_visita: idv,
@@ -1355,7 +1804,9 @@ function PDF_getVisitaPayload_v1(idVisita) {
     imovel,
     agenda,
     avaliacoes,
-    nota_media: notaMedia
+    nota_media: notaMedia,
+    clientes_nomes: clientesNomes,
+    bg_data_url: _PDF_getBackgroundDataUrl_()
   };
 }
 
@@ -1550,6 +2001,70 @@ function EST_getDistinctFilters_v1() {
  * filters = { bairro?:string, quartos?:string, vmin?:number|null, vmax?:number|null }
  * Retorna [{id,label,raw}]
  */
+
+
+function CAP_listForPanel_v1() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sh = ss.getSheetByName("Fato_Captacao");
+  if (!sh) return [];
+
+  const lr = sh.getLastRow();
+  const lc = sh.getLastColumn();
+  if (lr < 2 || lc < 1) return [];
+
+  const headers = sh.getRange(1, 1, 1, lc).getDisplayValues()[0].map(h => String(h || "").trim());
+  const normToIdx = {};
+  headers.forEach((h, i) => {
+    const k = _normHeader_(h).replace(/\s+/g, "");
+    if (k) normToIdx[k] = i;
+  });
+
+  function idxByCandidates_(arr) {
+    for (let i = 0; i < arr.length; i++) {
+      const k = _normHeader_(arr[i]).replace(/\s+/g, "");
+      if (normToIdx[k] !== undefined) return normToIdx[k];
+    }
+    return undefined;
+  }
+
+  const idxId = idxByCandidates_(["Código", "Codigo", "ID", "Id", "id"]);
+  if (idxId === undefined) throw new Error('Fato_Captacao: coluna de ID não encontrada (Código/Codigo/ID).');
+
+  const idxTipo = idxByCandidates_(["Tipo"]);
+  const idxBairro = idxByCandidates_(["Bairro"]);
+  const idxValor = idxByCandidates_(["Valor"]);
+  const idxCaptadores = idxByCandidates_(["Captadores"]);
+
+  const range = sh.getRange(2, 1, lr - 1, lc);
+  const vals = range.getValues();
+  const disp = range.getDisplayValues();
+
+  const out = [];
+  for (let i = 0; i < vals.length; i++) {
+    const id = String(vals[i][idxId] ?? "").trim() || String(disp[i][idxId] ?? "").trim();
+    if (!id) continue;
+
+    const tipo = idxTipo !== undefined ? String(vals[i][idxTipo] ?? "").trim() : "";
+    const bairro = idxBairro !== undefined ? String(vals[i][idxBairro] ?? "").trim() : "";
+    const valorDisp = idxValor !== undefined ? String(disp[i][idxValor] ?? "").trim() : "";
+    const captadores = idxCaptadores !== undefined ? String(vals[i][idxCaptadores] ?? "").trim() : "";
+
+    out.push({
+      id,
+      label: `${captadores || "-"} • ${tipo || "-"} • ${bairro || "-"} • ${valorDisp || "-"}`,
+      raw: {
+        "Código": id,
+        "Captadores": captadores,
+        "Tipo": tipo,
+        "Bairro": bairro,
+        "Valor": valorDisp
+      }
+    });
+  }
+
+  out.sort((a,b)=> String(a.label || "").localeCompare(String(b.label || ""), "pt-BR"));
+  return out;
+}
 function EST_listForPanelFiltered_v1(filters) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sh = ss.getSheetByName(EST_CFG.SHEET);
@@ -1865,4 +2380,3 @@ function LC_listForPanelFiltered_v4(filters) {
   out.sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
   return out;
 }
-

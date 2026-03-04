@@ -3,103 +3,260 @@
   <head>
     <meta charset="utf-8" />
     <style>
-      body { font-family: Arial, sans-serif; font-size: 11px; color: #111; }
-      h1 { font-size: 16px; margin: 0 0 6px 0; }
-      h2 { font-size: 12px; margin: 14px 0 6px 0; }
-      .box { border: 1px solid #ddd; border-radius: 8px; padding: 10px; margin-top: 8px; }
-      .row { display: flex; gap: 10px; }
-      .col { flex: 1; }
-      table { width: 100%; border-collapse: collapse; margin-top: 6px; }
-      th, td { border: 1px solid #ddd; padding: 6px; vertical-align: top; }
-      th { background: #f5f5f5; }
-      .muted { color: #666; }
-      .small { font-size: 10px; }
-      .right { text-align: right; }
+      @page { size: A4; margin: 10mm; }
+      html, body { width:210mm; height:297mm; margin:0; padding:0; overflow:hidden; }
+
+      :root{
+        --ink:#0f172a; --muted:#64748b; --line:#e2e8f0; --bg:#ffffff;
+        --card-alpha:0.00; --cell-alpha:0.00; --border-alpha:1;
+        --page-padding: 8mm;
+        --footer-reserve: 9mm;
+        --footer-bottom: 6mm;
+        --card-mb: 16px; --card-radius: 12px; --card-pad: 24px;
+      }
+
+      *{box-sizing:border-box}
+      body{ font:12px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, "Helvetica Neue", sans-serif;
+            color:var(--ink); background:var(--bg); padding: var(--page-padding); position: relative; }
+
+      .bgmark{
+        position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+        width:75%; height:auto; opacity:0.07; z-index:0; pointer-events:none;
+      }
+
+      .wrapper{ position:relative; z-index:1; height:100%; }
+      .content{ height:100%; padding-bottom: var(--footer-reserve); overflow:hidden; }
+
+      .card{
+        border:1px solid rgba(226,232,240,var(--border-alpha));
+        border-radius: var(--card-radius);
+        padding: var(--card-pad);
+        margin-bottom: var(--card-mb);
+        background: rgba(255,255,255,var(--card-alpha));
+        page-break-inside: avoid;
+      }
+      .card:last-of-type{ margin-bottom:0; }
+
+      h1,h2,h3{margin:0 0 6px 0}
+      h1{font-size:18px}
+      h2{font-size:13px; color:var(--muted); font-weight:600; letter-spacing:.2px; text-transform:uppercase}
+      p{margin:6px 0}
+      .grid{display:grid; grid-template-columns:1fr 1fr; gap:8px}
+
+      .badge{ display:inline-block; padding:3px 6px; background:transparent;
+              border:1px solid rgba(226,232,240,var(--border-alpha)); border-radius:999px; font-size:11px; color:var(--muted) }
+
+      .kv{width:100%; border-collapse:collapse; margin-top:6px; table-layout:fixed;}
+      .kv th,.kv td{
+        border:1px solid rgba(226,232,240,var(--border-alpha));
+        padding:6px; text-align:left; vertical-align:top; background: rgba(255,255,255,var(--cell-alpha));
+      }
+      .kv th{overflow-wrap:anywhere; word-break:break-word}
+      .kv td{overflow-wrap:anywhere; word-break:break-word}
+
+      ul{margin:6px 0; padding-left:16px}
+      .hero{display:flex; justify-content:space-between; align-items:center; gap:8px}
+      .hero .title{font-size:20px; font-weight:700}
+      .hero .meta{color:var(--muted); font-size:11px}
+      .pill{ padding:4px 8px; border-radius:999px; border:1px solid rgba(226,232,240,var(--border-alpha)); background:transparent; font-size:11px }
+      .price{font-size:16px; font-weight:700}
+      .muted{color:var(--muted)}
+      .divider{height:1px; background:rgba(226,232,240,var(--border-alpha)); margin:10px 0}
+      .clamp-4{display:-webkit-box; -webkit-line-clamp:4; -webkit-box-orient:vertical; overflow:hidden;}
+
+      .ratings h2{ font-size:13px; }
+      .ratings .badge{ font-size:11px; padding:3px 6px; }
+      .ratings .kv th, .ratings .kv td { padding:6px; font-size:12px; }
+      .ratings--compact h2{ font-size:12px; }
+      .ratings--compact .badge{ font-size:10px; padding:2px 6px; }
+      .ratings--compact .kv th, .ratings--compact .kv td { padding:5px; font-size:11px; }
+
+      .footer{
+        position:absolute; left: var(--page-padding); right: var(--page-padding);
+        bottom: var(--footer-bottom); z-index:1; text-align:left;
+      }
     </style>
   </head>
   <body>
-    <? const d = data; ?>
+    <? const d = (typeof data !== "undefined" && data) ? data : {}; ?>
     <? const fato = d.fato || {}; ?>
     <? const imv = d.imovel || null; ?>
     <? const ag = d.agenda || null; ?>
     <? const avs = d.avaliacoes || []; ?>
+    <?
+      function esc_(s){ return (s === null || s === undefined) ? "" : String(s); }
+      function fmtMoneyBRL_(n){
+        if (n === null || n === undefined || n === "") return "";
+        const num = Number(n);
+        if (isNaN(num)) return String(n);
+        return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(num);
+      }
+      function avg_(arr){
+        const nums = (arr || []).map(x => Number(x)).filter(x => !isNaN(x));
+        if (!nums.length) return null;
+        return nums.reduce((a,b)=>a+b,0) / nums.length;
+      }
+      function pad2_(n){ return String(n).padStart(2,'0'); }
+      function fmtDateBR_(v){
+        if (v == null || v === '') return '';
+        if (typeof v === 'string' && /^\d{1,2}\/\d{1,2}\/\d{4}$/.test(v.trim())) return v.trim();
+        if (typeof v === 'number') {
+          const epoch = new Date(Date.UTC(1899, 11, 30));
+          const d0 = new Date(epoch.getTime() + v * 86400000);
+          return pad2_(d0.getUTCDate()) + '/' + pad2_(d0.getUTCMonth()+1) + '/' + d0.getUTCFullYear();
+        }
+        if (v instanceof Date && !isNaN(v.getTime())) {
+          return pad2_(v.getDate()) + '/' + pad2_(v.getMonth()+1) + '/' + v.getFullYear();
+        }
+        const d1 = new Date(v);
+        if (!isNaN(d1.getTime())) {
+          return pad2_(d1.getDate()) + '/' + pad2_(d1.getMonth()+1) + '/' + d1.getFullYear();
+        }
+        return String(v);
+      }
+      function prettyKey_(k){ return String(k || '').replace(/_/g, ' ').replace(/\b(\w)/g, m => m.toUpperCase()); }
 
-    <h1>Relatório de Visita — #<?= d.id_visita ?></h1>
-    <div class="muted small">Gerado em: <?= (new Date()).toLocaleString('pt-BR') ?></div>
+      const visitaId = esc_(d.id_visita || "");
+      const dataVisita = fmtDateBR_(d.data_visita || fato["Data_Visita"] || "");
+      const end = imv ? esc_(imv['Endereço'] || imv['Endereco'] || imv['Quadra/Endereço'] || '') : '';
+      const bairro = imv ? esc_(imv['Bairro'] || '') : '';
+      const valor = imv ? fmtMoneyBRL_(imv['Valor'] || imv['Preço']) : '';
 
-    <div class="box">
-      <div class="row">
-        <div class="col">
-          <b>Data da visita:</b> <?= d.data_visita || "" ?><br/>
-          <b>Imóvel (código):</b> <?= d.id_imovel || "" ?><br/>
-          <b>Agenda vinculada:</b> <?= d.id_agendamento || "-" ?><br/>
+      const clientesList = (d.clientes_nomes && d.clientes_nomes.length)
+        ? d.clientes_nomes
+        : Array.from(new Set((avs || []).map(a => esc_(a.Cliente_Nome)).filter(Boolean)));
+
+      const MEDIA_KEYS = ['Localizacao','Tamanho','Planta_Imovel','Qualidade_Acabamento','Estado_Conservacao','Condominio_AreaComun','Preco','Nota_Geral'];
+      const perColMeans = MEDIA_KEYS.map(col => {
+        const nums = (avs || []).map(a => Number(a[col])).filter(n => !isNaN(n));
+        return nums.length ? (nums.reduce((a,b)=>a+b,0)/nums.length) : null;
+      }).filter(x => x !== null);
+      const mediaGeral = perColMeans.length ? avg_(perColMeans) : null;
+
+      const AVAL_COLS = ['Localizacao','Tamanho','Planta_Imovel','Qualidade_Acabamento','Estado_Conservacao','Condominio_AreaComun','Preco','Nota_Geral','Preco_N10'];
+      const AVAL_LABELS = {
+        'Localizacao':'Localização',
+        'Tamanho':'Tamanho',
+        'Planta_Imovel':'Planta do Imóvel',
+        'Qualidade_Acabamento':'Qualidade do Acabamento',
+        'Estado_Conservacao':'Estado de Conservação',
+        'Condominio_AreaComun':'Condomínio / Área Comum',
+        'Preco':'Preço',
+        'Nota_Geral':'Nota Geral',
+        'Preco_N10':'Preço Nota 10'
+      };
+      const respondents = (avs || []).map((a, i) => esc_(a.Cliente_Nome || a.CreatedBy || ('Avaliação #' + (i+1))));
+      const compact = (avs || []).length > 1;
+
+      // =========================
+      // Dados fixos do corretor
+      // (edite aqui quando quiser)
+      // =========================
+      const CORRETOR_FIXO = {
+        nome: "",
+        telefone: "",
+        instagram: "",
+        descricao: ""
+      };
+
+      const BADGE_MEDIA = (mediaGeral!=null)
+        ? `<span class="badge">Média Geral: ${Number(mediaGeral).toFixed(2)}</span>`
+        : '';
+
+      const BG_IMG_URL = String(d.bg_data_url || '').trim();
+    ?>
+
+    <? if (BG_IMG_URL) { ?>
+      <img class="bgmark" src="<?!= BG_IMG_URL ?>" alt="fundo" />
+    <? } ?>
+
+    <div class="wrapper">
+      <div class="content">
+        <div class="card">
+          <div class="hero">
+            <div>
+              <div class="title">Relatório da Visita <?= visitaId ?></div>
+              <div class="meta">CRM Corretagem</div>
+            </div>
+            <div><span class="pill">Data: <?= esc_(dataVisita) ?></span></div>
+          </div>
+          <div class="divider"></div>
+          <div class="grid">
+            <div>
+              <h2>Imóvel</h2>
+              <p><strong>Código:</strong> <?= esc_(d.id_imovel || '-') ?></p>
+              <p><strong>Endereço:</strong> <?= end || '<span class="muted">—</span>' ?></p>
+              <p><strong>Bairro:</strong> <?= bairro || '<span class="muted">—</span>' ?></p>
+              <p class="price"><strong>Valor:</strong> <?= valor || '<span class="muted">—</span>' ?></p>
+            </div>
+            <div>
+              <h2>Corretor</h2>
+              <p><strong>Nome:</strong> <?= esc_(CORRETOR_FIXO.nome || '-') ?></p>
+              <p><strong>Telefone:</strong> <?= esc_(CORRETOR_FIXO.telefone || '-') ?></p>
+              <p><strong>Instagram:</strong> <?= esc_(CORRETOR_FIXO.instagram || '-') ?></p>
+              <p><strong>Descrição:</strong> <?= esc_(CORRETOR_FIXO.descricao || '-') ?></p>
+            </div>
+          </div>
         </div>
-        <div class="col">
-          <b>Nota média:</b> <?= (d.nota_media !== null) ? d.nota_media.toFixed(2) : "-" ?><br/>
-          <b>Anexo (ficha):</b>
-          <? if (d.anexo_ficha_visita) { ?>
-            <?= d.anexo_ficha_visita ?>
+
+
+        <div class="card">
+          <h2>Clientes</h2>
+          <? if (clientesList.length) { ?>
+            <ul>
+              <? clientesList.forEach(function(nome){ ?>
+                <li><strong><?= esc_(nome) ?></strong></li>
+              <? }); ?>
+            </ul>
           <? } else { ?>
-            -
+            <ul><li><em>Sem clientes vinculados.</em></li></ul>
+          <? } ?>
+        </div>
+
+        <div class="<?= compact ? 'card ratings ratings--compact' : 'card ratings' ?>">
+          <h2>Avaliações <?!= BADGE_MEDIA ?></h2>
+
+          <? if (!avs.length) { ?>
+            <p><em>Sem avaliações registradas.</em></p>
+          <? } else { ?>
+            <table class="kv ratings-table" style="table-layout:fixed; width:100%;">
+              <thead>
+                <tr>
+                  <th>Critério</th>
+                  <? respondents.forEach(function(r){ ?>
+                    <th><?= esc_(r) ?></th>
+                  <? }); ?>
+                  <? if (avs.length > 1) { ?><th>Média</th><? } ?>
+                </tr>
+              </thead>
+              <tbody>
+                <? AVAL_COLS.forEach(function(col){ ?>
+                  <tr>
+                    <th><?= AVAL_LABELS[col] || prettyKey_(col) ?></th>
+                    <? avs.forEach(function(a){ ?>
+                      <? const v = a[col]; ?>
+                      <td><span class="clamp-4"><? if (col === 'Preco_N10') { ?><?= esc_(fmtMoneyBRL_(v)) ?><? } else { ?><?= esc_(v) ?><? } ?></span></td>
+                    <? }); ?>
+                    <? if (avs.length > 1) { ?>
+                      <?
+                        const vals = avs.map(a => Number(a[col])).filter(n => !isNaN(n));
+                        const med = vals.length ? (vals.reduce((a,b)=>a+b,0)/vals.length) : null;
+                      ?>
+                      <td><span class="clamp-4"><? if (med === null) { ?>-<? } else if (col === 'Preco_N10') { ?><?= esc_(fmtMoneyBRL_(med)) ?><? } else { ?><?= esc_(med.toFixed(0)) ?><? } ?></span></td>
+                    <? } ?>
+                  </tr>
+                <? }); ?>
+              </tbody>
+            </table>
           <? } ?>
         </div>
       </div>
-    </div>
 
-    <h2>Dados registrados (Fato_Visitas)</h2>
-    <div class="box small">
-      <? for (var k in fato) { ?>
-        <div><b><?= k ?>:</b> <?= String(fato[k] ?? "") ?></div>
-      <? } ?>
-    </div>
-
-    <? if (imv) { ?>
-      <h2>Imóvel (Estoque_Imoveis)</h2>
-      <div class="box small">
-        <? for (var k2 in imv) { ?>
-          <div><b><?= k2 ?>:</b> <?= String(imv[k2] ?? "") ?></div>
-        <? } ?>
+      <div class="footer">
+        <p class="muted">Campos numéricos exibem as notas individuais por respondente e, quando houver múltiplas avaliações, a média por critério na última coluna. A badge exibe a média geral do conjunto.<br>
+        Este relatório foi gerado automaticamente após a visita. Caso tenha dúvidas, entre em contato com seu corretor.<br>
+        Desenvolvido pelo Setor de Inteligência Imobiliária 61 Imóveis.</p>
       </div>
-    <? } ?>
-
-    <? if (ag) { ?>
-      <h2>Agenda vinculada (Agenda_Visitas)</h2>
-      <div class="box small">
-        <? for (var k3 in ag) { ?>
-          <div><b><?= k3 ?>:</b> <?= String(ag[k3] ?? "") ?></div>
-        <? } ?>
-      </div>
-    <? } ?>
-
-    <h2>Avaliações (Fato_Avaliacao)</h2>
-    <? if (!avs.length) { ?>
-      <div class="box muted">Nenhuma avaliação registrada para esta visita.</div>
-    <? } else { ?>
-      <table>
-        <thead>
-          <tr>
-            <th>Cliente</th>
-            <th class="right">Nota geral</th>
-            <th class="right">Preço N10</th>
-            <th>Detalhes</th>
-          </tr>
-        </thead>
-        <tbody>
-          <? avs.forEach(function(a){ ?>
-            <tr>
-              <td><?= a.Cliente_Nome || ("Cliente " + (a.Id_Cliente || "")) ?></td>
-              <td class="right"><?= (a.Nota_Geral ?? "") ?></td>
-              <td class="right"><?= (a.Preco_N10 ?? "") ?></td>
-              <td class="small">
-                <? for (var k4 in a) { ?>
-                  <? if (["Cliente_Nome","Nota_Geral","Preco_N10"].indexOf(k4) !== -1) continue; ?>
-                  <div><b><?= k4 ?>:</b> <?= String(a[k4] ?? "") ?></div>
-                <? } ?>
-              </td>
-            </tr>
-          <? }); ?>
-        </tbody>
-      </table>
-    <? } ?>
+    </div>
   </body>
 </html>

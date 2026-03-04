@@ -57,7 +57,15 @@
             </div>
             <div>
               <label>Forma de Pagamento</label>
-              <input name="Forma de Pagamento" placeholder="Ex: financiamento" />
+              <input name="Forma de Pagamento" list="formasPagamento" placeholder="Ex: financiamento" />
+              <datalist id="formasPagamento">
+                <option value="À vista"></option>
+                <option value="Financiamento"></option>
+                <option value="Financiamento + FGTS"></option>
+                <option value="Consórcio"></option>
+                <option value="Permuta"></option>
+                <option value="Parcelado com proprietário"></option>
+              </datalist>
             </div>
           </div>
 

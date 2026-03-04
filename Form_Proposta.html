@@ -57,7 +57,15 @@
             </div>
             <div>
               <label>Modalidade de Pagamento</label>
-              <input name="Modalidade de Pagamento" placeholder="Ex: financiamento + FGTS" />
+              <input name="Modalidade de Pagamento" list="modalidadesPagamento" placeholder="Ex: financiamento + FGTS" />
+              <datalist id="modalidadesPagamento">
+                <option value="À vista"></option>
+                <option value="Financiamento"></option>
+                <option value="Financiamento + FGTS"></option>
+                <option value="Consórcio"></option>
+                <option value="Permuta"></option>
+                <option value="Parcelado com proprietário"></option>
+              </datalist>
             </div>
           </div>
 

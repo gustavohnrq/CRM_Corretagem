@@ -10,6 +10,7 @@ var FU_CFG = {
   DEFAULT_HOUR_START: 8,
   DAILY_HANDLER: 'FU_dailyFollowUpJob_',
   SHEETS: [
+    { name: 'Base_Clientes', idCandidates: ['ID', 'Id', 'id'], title: 'Cliente' },
     { name: 'Leads_Compradores', idCandidates: ['ID', 'Id', 'id'], title: 'Lead Comprador' },
     { name: 'Leads_Vendedores', idCandidates: ['ID', 'Id', 'id'], title: 'Lead Vendedor' },
     { name: 'Fato_Visitas', idCandidates: ['Id_Visita', 'ID_Visita', 'id_visita'], title: 'Visita' },
@@ -17,7 +18,7 @@ var FU_CFG = {
     { name: 'Fato_Venda', idCandidates: ['Id_Venda', 'id_venda'], title: 'Venda' },
     { name: 'Fato_Captacao', idCandidates: ['Código', 'Codigo', 'ID', 'Id', 'id'], title: 'Captação' }
   ],
-  FOLLOWUP_CANDIDATES: ['Próximo Follow-up', 'Proximo Follow-up', 'Próxima Data de Contato', 'Proxima Data de Contato', 'Follow-up', 'Follow up'],
+  FOLLOWUP_CANDIDATES: ['Próximo Follow-up'],
   DATE_CANDIDATES: ['Data', 'DataCadastro', 'Data_Visita', 'Data de Entrada', 'Data Entrada'],
   VALUE_CANDIDATES: ['Valor', 'Valor da Proposta', 'Valor da Venda', 'Preço', 'Preco']
 };
@@ -57,6 +58,7 @@ function FU_syncAgendaNow_v1() {
 function FU_syncFollowUpForRecord_(sheetName, idCol, idVal, obj) {
   try {
     if (!FU_isMonitoredSheet_(sheetName)) return { ok: true, skipped: true };
+    if (!FU_sheetHasExactFollowUpColumn_(sheetName)) return { ok: true, skipped: true, reason: 'sheet_without_proximo_followup' };
 
     var record = obj || DataService.getById(sheetName, idCol, idVal);
     if (!record) return { ok: true, skipped: true, reason: 'record_not_found' };
@@ -134,9 +136,21 @@ function FU_sendDailyEmail_(items) {
   return { ok: true, sent: items.length };
 }
 
+
+function FU_sheetHasExactFollowUpColumn_(sheetName) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sh = ss.getSheetByName(sheetName);
+  if (!sh) return false;
+  var lc = sh.getLastColumn();
+  if (lc < 1) return false;
+  var headers = sh.getRange(1, 1, 1, lc).getDisplayValues()[0].map(function (h) { return String(h || '').trim(); });
+  return headers.indexOf('Próximo Follow-up') !== -1;
+}
+
 function FU_collectFollowUpsByRange_(start, end) {
   var out = [];
   FU_CFG.SHEETS.forEach(function (cfg) {
+    if (!FU_sheetHasExactFollowUpColumn_(cfg.name)) return;
     var rows = FU_readSheetObjects_(cfg.name);
     rows.forEach(function (row) {
       var item = FU_buildFollowUpItem_(cfg.name, row, null, null);
@@ -153,7 +167,7 @@ function FU_collectFollowUpsByRange_(start, end) {
 function FU_buildFollowUpItem_(sheetName, row, idCol, idVal) {
   if (!row) return null;
 
-  var followUpRaw = FU_pick_(row, FU_CFG.FOLLOWUP_CANDIDATES);
+  var followUpRaw = String(row['Próximo Follow-up'] || '').trim();
   var followUpDate = FU_parseDateAny_(followUpRaw);
   if (!followUpDate) return null;
 
@@ -228,6 +242,17 @@ function FU_buildHierarchyDetails_(sheetName, row) {
         tipo: 'captacao',
         tipoImovel: FU_pick_(row, ['Tipo']),
         captadores: FU_pick_(row, ['Captadores']),
+        base: base
+      };
+    }
+
+    if (sheetName === 'Base_Clientes') {
+      return {
+        tipo: 'cliente',
+        origem: FU_pick_(row, ['Origem']),
+        statusAtual: FU_pick_(row, ['Status Atual']),
+        perfil: FU_pick_(row, ['Perfil (Moradia/Investimento)']),
+        regiaoInteresse: FU_pick_(row, ['Região de Interesse']),
         base: base
       };
     }

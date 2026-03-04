@@ -104,18 +104,6 @@
         </div>
 
         <div class="card" style="margin:0; grid-column: 1 / -1;">
-          <h3>Follow-up por Quadros</h3>
-          <div class="hint" id="kpiFollow"></div>
-          <div class="grid" style="grid-template-columns: repeat(5, 1fr); gap:10px;">
-            <div class="card" style="margin:0;"><h3>Leads</h3><div class="list" id="fuLeads" style="max-height:220px;"></div></div>
-            <div class="card" style="margin:0;"><h3>Captações</h3><div class="list" id="fuCaptacoes" style="max-height:220px;"></div></div>
-            <div class="card" style="margin:0;"><h3>Visitas</h3><div class="list" id="fuVisitas" style="max-height:220px;"></div></div>
-            <div class="card" style="margin:0;"><h3>Propostas</h3><div class="list" id="fuPropostas" style="max-height:220px;"></div></div>
-            <div class="card" style="margin:0;"><h3>Vendas</h3><div class="list" id="fuVendas" style="max-height:220px;"></div></div>
-          </div>
-        </div>
-
-        <div class="card" style="margin:0; grid-column: 1 / -1;">
           <h3>Minha Agenda Google</h3>
           <div class="hint">Visualização da agenda para acompanhamento diário do funil e follow-ups.</div>
           <div class="btns" style="margin-top:8px;">
@@ -179,14 +167,6 @@
         renderKpiCharts(d.kpis || []);
         renderPortfolioKpis(d.kpisPortfolio || {});
 
-        const boards = d.follow || {};
-        renderFollowList("fuLeads", boards.leads ? [].concat(boards.leads.overdue||[], boards.leads.today||[], boards.leads.week||[]) : []);
-        renderFollowList("fuCaptacoes", boards.captacoes ? [].concat(boards.captacoes.overdue||[], boards.captacoes.today||[], boards.captacoes.week||[]) : []);
-        renderFollowList("fuVisitas", boards.visitas ? [].concat(boards.visitas.overdue||[], boards.visitas.today||[], boards.visitas.week||[]) : []);
-        renderFollowList("fuPropostas", boards.propostas ? [].concat(boards.propostas.overdue||[], boards.propostas.today||[], boards.propostas.week||[]) : []);
-        renderFollowList("fuVendas", boards.vendas ? [].concat(boards.vendas.overdue||[], boards.vendas.today||[], boards.vendas.week||[]) : []);
-
-        byId("kpiFollow").innerHTML = "Acompanhamento por quadro (vencidos + hoje + próximos 7 dias).";
       }
 
 
@@ -251,14 +231,6 @@
         const v = Number(n || 0);
         return v.toLocaleString("pt-BR", { style:"currency", currency:"BRL" });
       }
-
-      function renderFollowList(elId, arr){
-        const el = byId(elId);
-        el.innerHTML = "";
-        if (!arr || arr.length === 0){
-          el.innerHTML = `<div class="hint">Sem itens.</div>`;
-          return;
-        }
         arr.forEach(x=>{
           const div = document.createElement("div");
           div.className = "item";

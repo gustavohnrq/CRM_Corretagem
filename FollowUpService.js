@@ -52,7 +52,7 @@ function FU_syncAgendaNow_v1() {
   ensureSchema_();
   Logger.log('[FollowUp] Sincronização manual da agenda solicitada via menu.');
   var sync = FU_syncAllFutureFollowUpsToCalendar_();
-  Logger.log('[FollowUp] Sincronização manual concluída: ' + JSON.stringify(sync));
+  Logger.log('[FollowUp] Sincronização manual concluída com sucesso. Total=' + sync.total + ' | Criados=' + sync.created + ' | Atualizados=' + sync.updated + ' | Falhas=' + sync.failed);
   return { ok: true, source: 'manual_menu', calendar: sync };
 }
 function FU_syncFollowUpForRecord_(sheetName, idCol, idVal, obj) {
@@ -76,18 +76,31 @@ function FU_syncAllFutureFollowUpsToCalendar_() {
   var today = FU_startOfDay_(new Date());
   var items = FU_collectFollowUpsByRange_(today, null);
   var created = 0, updated = 0, failed = 0;
+  var bySheet = {};
 
   items.forEach(function (item) {
+    if (!bySheet[item.sheetName]) bySheet[item.sheetName] = { total: 0, created: 0, updated: 0, failed: 0 };
+    bySheet[item.sheetName].total++;
+
     var r = FU_upsertCalendarEventForItem_(item);
     if (!r || !r.ok) {
       failed++;
+      bySheet[item.sheetName].failed++;
       Logger.log('[FollowUp] Falha ao sincronizar calendário: ' + FU_buildHumanLine_(item));
       return;
     }
-    if (r.action === 'created') created++; else updated++;
+
+    if (r.action === 'created') {
+      created++;
+      bySheet[item.sheetName].created++;
+    } else {
+      updated++;
+      bySheet[item.sheetName].updated++;
+    }
   });
 
-  return { ok: true, total: items.length, created: created, updated: updated, failed: failed };
+  Logger.log('[FollowUp] Resumo por aba: ' + JSON.stringify(bySheet));
+  return { ok: true, total: items.length, created: created, updated: updated, failed: failed, bySheet: bySheet };
 }
 
 function FU_collectTodayFollowUpsDetailed_() {
@@ -280,6 +293,8 @@ function FU_slimVisita_(visita) {
 
 function FU_upsertCalendarEventForItem_(item) {
   var cal = FU_getCalendar_();
+  var calName = '';
+  try { calName = cal.getName(); } catch (e) {}
   var startAt = FU_withTime_(item.followUpDate, 6, 0, 0);
   var endAt = FU_withTime_(item.followUpDate, 18, 0, 0);
   var matches = FU_findEventsByKey_(cal, item.key);
@@ -288,7 +303,7 @@ function FU_upsertCalendarEventForItem_(item) {
   var title = FU_buildEventTitle_(item);
   var desc = FU_buildEventDescription_(item);
 
-  Logger.log('[FollowUp] Payload agenda => key=' + item.key + ' | title=' + title + ' | start=' + startAt.toISOString() + ' | end=' + endAt.toISOString());
+  Logger.log('[FollowUp] Payload agenda => cal=' + FU_CFG.CALENDAR_ID + ' (' + calName + ') | key=' + item.key + ' | title=' + title + ' | start=' + startAt.toISOString() + ' | end=' + endAt.toISOString());
   Logger.log('[FollowUp] Payload descrição => ' + desc);
 
   if (match) {
@@ -305,12 +320,12 @@ function FU_upsertCalendarEventForItem_(item) {
       }
     }
 
-    Logger.log('[FollowUp] Evento atualizado: ' + title + ' | key: ' + item.key);
+    Logger.log('[FollowUp] Evento atualizado: ' + title + ' | key: ' + item.key + ' | eventId=' + match.getId());
     return { ok: true, action: 'updated', id: match.getId() };
   }
 
   var ev = cal.createEvent(title, startAt, endAt, { description: desc });
-  Logger.log('[FollowUp] Evento criado: ' + title + ' | key: ' + item.key);
+  Logger.log('[FollowUp] Evento criado: ' + title + ' | key: ' + item.key + ' | eventId=' + ev.getId());
   return { ok: true, action: 'created', id: ev.getId() };
 }
 
@@ -386,7 +401,11 @@ function FU_buildHumanLine_(item) {
 }
 
 function FU_getCalendar_() {
-  return CalendarApp.getCalendarById(FU_CFG.CALENDAR_ID) || CalendarApp.getDefaultCalendar();
+  var cal = CalendarApp.getCalendarById(FU_CFG.CALENDAR_ID);
+  if (!cal) {
+    throw new Error('Calendário alvo não encontrado/acessível: ' + FU_CFG.CALENDAR_ID);
+  }
+  return cal;
 }
 
 function FU_getSheetConfig_(sheetName) {

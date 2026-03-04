@@ -32,6 +32,13 @@
         <h3>Cadastro / Edição</h3>
 
         <form id="form">
+          <label>Venda ou Cap?</label>
+          <select name="Venda ou Cap?" id="tipoVisitaSelect">
+            <option value="">Selecione...</option>
+            <option value="Venda">Venda</option>
+            <option value="Captação">Captação</option>
+          </select>
+
           <div class="row">
             <div>
               <label>ID</label>
@@ -58,6 +65,7 @@
           <select name="Cliente" id="clienteSelect"></select>
 
           <label>Imóvel (Código)</label>
+          <input id="imovelSearch" placeholder="Pesquisar imóvel por código, bairro, tipo..." />
           <select name="Imóvel (Código)" id="imovelSelect"></select>
 
           <div class="row">
@@ -94,6 +102,7 @@
       const SHEET = "Agenda_Visitas";
       const IDCOL  = "ID";
       let currentId = null;
+      let imoveisCache = [];
 
       // ===== máscaras / validação =====
       function onlyDigits(s){ return String(s||"").replace(/\D/g,""); }
@@ -151,15 +160,32 @@
         }).listClientesForSelect();
 
         google.script.run.withSuccessHandler(function(items){
-          const sel = byId("imovelSelect");
-          sel.innerHTML = `<option value="">Selecione...</option>`;
-          items.forEach(it=>{
-            const opt = document.createElement("option");
-            opt.value = it.id;
-            opt.textContent = it.label;
-            sel.appendChild(opt);
-          });
+          imoveisCache = (items || []).slice();
+          renderImoveisSelect_(imoveisCache, "");
         }).listImoveisForSelect();
+      }
+
+      function renderImoveisSelect_(items, selectedValue){
+        const sel = byId("imovelSelect");
+        const prev = selectedValue !== undefined ? selectedValue : (sel.value || "");
+        sel.innerHTML = `<option value="">Selecione...</option>`;
+        (items || []).forEach(it=>{
+          const opt = document.createElement("option");
+          opt.value = it.id;
+          opt.textContent = it.label;
+          sel.appendChild(opt);
+        });
+        sel.value = prev || "";
+      }
+
+      function filterImoveisSelect_(){
+        const q = String(byId("imovelSearch").value || "").trim().toLowerCase();
+        if (!q) return renderImoveisSelect_(imoveisCache);
+        const filtered = imoveisCache.filter(function(it){
+          return String(it.id || "").toLowerCase().indexOf(q) !== -1 ||
+                 String(it.label || "").toLowerCase().indexOf(q) !== -1;
+        });
+        renderImoveisSelect_(filtered);
       }
 
       // ===== LISTA: usa AG_* =====
@@ -173,8 +199,10 @@
                   if (!obj) return toast("Registro não encontrado.");
                   setFormFromObject("form", obj);
                   // mantém selects coerentes
+                  byId("tipoVisitaSelect").value = obj["Venda ou Cap?"] || "";
                   byId("clienteSelect").value = obj["Cliente"] || "";
-                  byId("imovelSelect").value = obj["Imóvel (Código)"] || "";
+                  byId("imovelSearch").value = "";
+                  renderImoveisSelect_(imoveisCache, obj["Imóvel (Código)"] || "");
                 })
                 .withFailureHandler(function(err){
                   toast("Erro ao carregar: " + (err.message || err));
@@ -191,14 +219,17 @@
       function newRecord(){
         currentId = null;
         clearForm("form");
+        byId("tipoVisitaSelect").value = "";
         byId("clienteSelect").value = "";
-        byId("imovelSelect").value = "";
+        byId("imovelSearch").value = "";
+        renderImoveisSelect_(imoveisCache, "");
       }
 
       function save(){
         try{
           const obj = formToObject("form");
 
+          obj["Venda ou Cap?"] = byId("tipoVisitaSelect").value || obj["Venda ou Cap?"] || "";
           obj["Cliente"] = byId("clienteSelect").value || obj["Cliente"] || "";
           obj["Imóvel (Código)"] = byId("imovelSelect").value || obj["Imóvel (Código)"] || "";
 
@@ -207,8 +238,8 @@
           const data = String(obj["Data"]||"").trim();
           const hora = String(obj["Hora"]||"").trim();
 
-          if (!data || !hora || !obj["Cliente"] || !obj["Imóvel (Código)"]) {
-            return toast("Preencha Data, Hora, Cliente e Imóvel.");
+          if (!obj["Venda ou Cap?"] || !data || !hora || !obj["Cliente"] || !obj["Imóvel (Código)"]) {
+            return toast("Preencha Venda/Captação, Data, Hora, Cliente e Imóvel.");
           }
           if (!isValidDDMMYYYY(data)) return toast("Data inválida. Use DD/MM/AAAA.");
           if (!isValidHHMM(hora)) return toast("Hora inválida. Use HH:MM.");
@@ -219,8 +250,10 @@
               currentId = res.id;
               obj[IDCOL] = res.id;
               setFormFromObject("form", obj);
+              byId("tipoVisitaSelect").value = obj["Venda ou Cap?"] || "";
               byId("clienteSelect").value = obj["Cliente"] || "";
-              byId("imovelSelect").value = obj["Imóvel (Código)"] || "";
+              byId("imovelSearch").value = "";
+              renderImoveisSelect_(imoveisCache, obj["Imóvel (Código)"] || "");
               loadList();
             })
             .withFailureHandler(function(err){
@@ -253,6 +286,7 @@
 
       maskDDMMYYYY(document.getElementById("Data"));
       maskHHMM(document.getElementById("Hora"));
+      byId("imovelSearch").addEventListener("input", filterImoveisSelect_);
 
       loadSelects();
       loadList();

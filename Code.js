@@ -24,6 +24,8 @@ const CFG = {
     "Form_RegistrarVisita": true,
     "Form_Proposta": true,
     "Form_Vendas": true,
+    "Form_Captacao": true,
+    "Form_PDFVisita": true,
     "Form_PDFVisitas": true
   }
 };
@@ -153,10 +155,22 @@ function parseAnyDate_(v) {
   return null;
 }
 
+
+function normalizePageName_(page) {
+  const raw = String(page || "").trim().replace(/^['"]+|['"]+$/g, "");
+  const aliases = {
+    "Form_PDFVisitas": "Form_PDFVisita",
+    "Form_Venda": "Form_Vendas",
+    "Form_Propostas": "Form_Proposta"
+  };
+  return aliases[raw] || raw;
+}
+
 function doGet(e) {
   ensureSchema_();
 
-  const page = (e && e.parameter && e.parameter.page) ? e.parameter.page : CFG.DEFAULT_PAGE;
+  const requested = (e && e.parameter && e.parameter.page) ? e.parameter.page : CFG.DEFAULT_PAGE;
+  const page = normalizePageName_(requested);
   const safePage = CFG.PAGES[page] ? page : CFG.DEFAULT_PAGE;
 
   return HtmlService
@@ -200,47 +214,95 @@ function openWebApp_() {
   SpreadsheetApp.getUi().showModalDialog(html, "Abrir CRM Corretagem");
 }
 
+
+function ensureColumnIfMissing_(sheetName, colName) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sh = ss.getSheetByName(sheetName);
+  if (!sh) return;
+  const lc = sh.getLastColumn();
+  if (lc < 1) return;
+  const headers = sh.getRange(1,1,1,lc).getDisplayValues()[0].map(h=>String(h||"").trim());
+  if (headers.includes(colName)) return;
+  sh.getRange(1, lc+1).setValue(colName);
+  sh.getRange(1,1,1,lc+1).setFontWeight("bold");
+}
+
+function ensureCaptacaoSchema_(){
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sh = ss.getSheetByName("Fato_Captacao");
+  const headers = [
+    "Código","Captadores","Proprietario","Tipo","Quartos","Valor","Endereco","Bairro","PublicacaoNaInternet","Exclusivo","Detalhes","Próximo Follow-up","DataCadastro"
+  ];
+  if (!sh) sh = ss.insertSheet("Fato_Captacao");
+  const lc = sh.getLastColumn();
+  const current = lc>0 ? sh.getRange(1,1,1,lc).getDisplayValues()[0].map(h=>String(h||"").trim()) : [];
+  const eq = current.length===headers.length && headers.every((h,i)=>h===current[i]);
+  if (!eq){
+    sh.clear();
+    sh.getRange(1,1,1,headers.length).setValues([headers]);
+    sh.getRange(1,1,1,headers.length).setFontWeight("bold");
+  }
+}
+
 /**
  * ✅ Garante que a aba "Agenda_Visitas" tenha coluna "id" (minúsculo) na coluna A.
  * - Se existir "id" OU "ID", não altera.
  * - Se não existir, cria e preenche ids sequenciais.
  */
-function ensureSchema_() {
+var __SCHEMA_ENSURED__ = false;
+
+function ensureSchema_(force) {
+  if (__SCHEMA_ENSURED__ && !force) return;
+
   if (typeof ensurePropostaVendaSchema_ === "function") {
     try { ensurePropostaVendaSchema_(); } catch (e) {}
   }
+  try { ensureCaptacaoSchema_(); } catch(e) {}
 
+  // colunas de apoio em abas relacionadas (independente de Agenda_Visitas existir)
+  ensureColumnIfMissing_("Fato_Visitas", "Tipo_Visita");
+  ensureColumnIfMissing_("Fato_Visitas", "Próximo Follow-up");
+  ensureColumnIfMissing_("Fato_Proposta", "Próximo Follow-up");
+  ensureColumnIfMissing_("Fato_Venda", "Próximo Follow-up");
+  ensureColumnIfMissing_("Leads_Compradores", "Próximo Follow-up");
+  ensureColumnIfMissing_("Leads_Vendedores", "Próximo Follow-up");
+
+  // ajuste específico de Agenda_Visitas: garantir coluna id na A
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sh = ss.getSheetByName("Agenda_Visitas");
-  if (!sh) return;
 
-  const lc = sh.getLastColumn();
-  if (lc < 1) return;
+  if (sh) {
+    const lc = sh.getLastColumn();
+    if (lc >= 1) {
+      const headers = sh.getRange(1, 1, 1, lc).getValues()[0].map(h => String(h || "").trim());
+      const hasIdLower = headers.includes("id");
+      const hasIdUpper = headers.includes("ID");
 
-  const headers = sh.getRange(1, 1, 1, lc).getValues()[0].map(h => String(h || "").trim());
-  const hasIdLower = headers.includes("id");
-  const hasIdUpper = headers.includes("ID");
-  if (hasIdLower || hasIdUpper) return;
+      if (!hasIdLower && !hasIdUpper) {
+        sh.insertColumnBefore(1);
+        sh.getRange(1, 1).setValue("id");
+        sh.getRange(1, 1, 1, sh.getLastColumn()).setFontWeight("bold");
 
-  sh.insertColumnBefore(1);
-  sh.getRange(1, 1).setValue("id");
-  sh.getRange(1, 1, 1, sh.getLastColumn()).setFontWeight("bold");
+        const lr = sh.getLastRow();
+        if (lr >= 2) {
+          const idRange = sh.getRange(2, 1, lr - 1, 1);
+          const ids = idRange.getValues();
+          let next = 1;
 
-  const lr = sh.getLastRow();
-  if (lr >= 2) {
-    const idRange = sh.getRange(2, 1, lr - 1, 1);
-    const ids = idRange.getValues();
-    let next = 1;
-
-    for (let i = 0; i < ids.length; i++) {
-      if (!ids[i][0]) ids[i][0] = next++;
-      else {
-        const n = Number(ids[i][0]);
-        if (!isNaN(n) && isFinite(n)) next = Math.max(next, n + 1);
+          for (let i = 0; i < ids.length; i++) {
+            if (!ids[i][0]) ids[i][0] = next++;
+            else {
+              const n = Number(ids[i][0]);
+              if (!isNaN(n) && isFinite(n)) next = Math.max(next, n + 1);
+            }
+          }
+          idRange.setValues(ids);
+        }
       }
     }
-    idRange.setValues(ids);
   }
+
+  __SCHEMA_ENSURED__ = true;
 }
 
 /* ===============================
@@ -250,7 +312,16 @@ function ensureSchema_() {
 function getMeta(sheetName) { return DataService.getMeta(sheetName); }
 function listRecords(sheetName, idCol, labelCols) { return DataService.listRecords(sheetName, idCol, labelCols); }
 function getById(sheetName, idCol, idVal) { return DataService.getById(sheetName, idCol, idVal); }
-function upsertById(sheetName, idCol, obj) { return DataService.upsertById(sheetName, idCol, obj); }
+function upsertById(sheetName, idCol, obj) {
+  const res = DataService.upsertById(sheetName, idCol, obj);
+  try {
+    if (typeof FU_syncFollowUpForRecord_ === "function") {
+      const idVal = String((res && res.id) || obj[idCol] || "").trim();
+      FU_syncFollowUpForRecord_(sheetName, idCol, idVal, obj);
+    }
+  } catch (e) {}
+  return res;
+}
 function deleteById(sheetName, idCol, idVal) { return DataService.deleteById(sheetName, idCol, idVal); }
 function getNextNumericId(sheetName, idCol) { return DataService.getNextNumericId(sheetName, idCol); }
 function listClientesForSelect() { return DataService.listClientesForSelect(); }
@@ -1487,13 +1558,22 @@ function RV_upsertFatoVisita_v2(obj) {
   // garante Id_Visita gravado
   writeRow[idxIdVis] = idv;
 
+  let result;
   if (rowIndex === -1) {
     sh.appendRow(writeRow);
-    return { ok: true, action: "created", id: idv };
+    result = { ok: true, action: "created", id: idv };
   } else {
     sh.getRange(rowIndex, 1, 1, lc).setValues([writeRow]);
-    return { ok: true, action: "updated", id: idv };
+    result = { ok: true, action: "updated", id: idv };
   }
+
+  try {
+    if (typeof FU_syncFollowUpForRecord_ === "function") {
+      FU_syncFollowUpForRecord_("Fato_Visitas", "Id_Visita", idv, obj);
+    }
+  } catch (e) {}
+
+  return result;
 }
 
 // ======================================================
@@ -1921,6 +2001,70 @@ function EST_getDistinctFilters_v1() {
  * filters = { bairro?:string, quartos?:string, vmin?:number|null, vmax?:number|null }
  * Retorna [{id,label,raw}]
  */
+
+
+function CAP_listForPanel_v1() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sh = ss.getSheetByName("Fato_Captacao");
+  if (!sh) return [];
+
+  const lr = sh.getLastRow();
+  const lc = sh.getLastColumn();
+  if (lr < 2 || lc < 1) return [];
+
+  const headers = sh.getRange(1, 1, 1, lc).getDisplayValues()[0].map(h => String(h || "").trim());
+  const normToIdx = {};
+  headers.forEach((h, i) => {
+    const k = _normHeader_(h).replace(/\s+/g, "");
+    if (k) normToIdx[k] = i;
+  });
+
+  function idxByCandidates_(arr) {
+    for (let i = 0; i < arr.length; i++) {
+      const k = _normHeader_(arr[i]).replace(/\s+/g, "");
+      if (normToIdx[k] !== undefined) return normToIdx[k];
+    }
+    return undefined;
+  }
+
+  const idxId = idxByCandidates_(["Código", "Codigo", "ID", "Id", "id"]);
+  if (idxId === undefined) throw new Error('Fato_Captacao: coluna de ID não encontrada (Código/Codigo/ID).');
+
+  const idxTipo = idxByCandidates_(["Tipo"]);
+  const idxBairro = idxByCandidates_(["Bairro"]);
+  const idxValor = idxByCandidates_(["Valor"]);
+  const idxCaptadores = idxByCandidates_(["Captadores"]);
+
+  const range = sh.getRange(2, 1, lr - 1, lc);
+  const vals = range.getValues();
+  const disp = range.getDisplayValues();
+
+  const out = [];
+  for (let i = 0; i < vals.length; i++) {
+    const id = String(vals[i][idxId] ?? "").trim() || String(disp[i][idxId] ?? "").trim();
+    if (!id) continue;
+
+    const tipo = idxTipo !== undefined ? String(vals[i][idxTipo] ?? "").trim() : "";
+    const bairro = idxBairro !== undefined ? String(vals[i][idxBairro] ?? "").trim() : "";
+    const valorDisp = idxValor !== undefined ? String(disp[i][idxValor] ?? "").trim() : "";
+    const captadores = idxCaptadores !== undefined ? String(vals[i][idxCaptadores] ?? "").trim() : "";
+
+    out.push({
+      id,
+      label: `${captadores || "-"} • ${tipo || "-"} • ${bairro || "-"} • ${valorDisp || "-"}`,
+      raw: {
+        "Código": id,
+        "Captadores": captadores,
+        "Tipo": tipo,
+        "Bairro": bairro,
+        "Valor": valorDisp
+      }
+    });
+  }
+
+  out.sort((a,b)=> String(a.label || "").localeCompare(String(b.label || ""), "pt-BR"));
+  return out;
+}
 function EST_listForPanelFiltered_v1(filters) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sh = ss.getSheetByName(EST_CFG.SHEET);

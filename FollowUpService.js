@@ -42,7 +42,7 @@ function FU_dailyFollowUpJob_() {
   Logger.log('[FollowUp] Iniciando rotina diária. Itens do dia: ' + itemsToday.length);
   FU_sendDailyEmail_(itemsToday);
   var sync = FU_syncAllFutureFollowUpsToCalendar_();
-  Logger.log('[FollowUp] Rotina diária concluída. Sync calendário: ' + JSON.stringify(sync));
+  Logger.log('[FollowUp] Rotina diária concluída com sucesso. Total=' + sync.total + ' | Criados=' + sync.created + ' | Atualizados=' + sync.updated + ' | Falhas=' + sync.failed);
   return { ok: true, todayCount: itemsToday.length, calendar: sync };
 }
 
@@ -255,34 +255,68 @@ function FU_slimVisita_(visita) {
 
 function FU_upsertCalendarEventForItem_(item) {
   var cal = FU_getCalendar_();
-  var dayStart = FU_startOfDay_(item.followUpDate);
-  var dayEnd = FU_endOfDay_(item.followUpDate);
-  var events = cal.getEvents(dayStart, dayEnd);
-  var match = null;
-
-  for (var i = 0; i < events.length; i++) {
-    var d = events[i].getDescription() || '';
-    if (d.indexOf(item.key) !== -1) { match = events[i]; break; }
-  }
+  var startAt = FU_withTime_(item.followUpDate, 6, 0, 0);
+  var endAt = FU_withTime_(item.followUpDate, 18, 0, 0);
+  var matches = FU_findEventsByKey_(cal, item.key);
+  var match = matches.length ? matches[0] : null;
 
   var title = FU_buildEventTitle_(item);
   var desc = FU_buildEventDescription_(item);
 
+  Logger.log('[FollowUp] Payload agenda => key=' + item.key + ' | title=' + title + ' | start=' + startAt.toISOString() + ' | end=' + endAt.toISOString());
+  Logger.log('[FollowUp] Payload descrição => ' + desc);
+
   if (match) {
     match.setTitle(title);
     match.setDescription(desc);
+    match.setTime(startAt, endAt);
+
+    if (matches.length > 1) {
+      for (var i = 1; i < matches.length; i++) {
+        try {
+          matches[i].deleteEvent();
+          Logger.log('[FollowUp] Evento duplicado removido: key=' + item.key + ' | id=' + matches[i].getId());
+        } catch (e) {}
+      }
+    }
+
     Logger.log('[FollowUp] Evento atualizado: ' + title + ' | key: ' + item.key);
     return { ok: true, action: 'updated', id: match.getId() };
   }
 
-  var ev = cal.createAllDayEvent(title, dayStart, { description: desc });
+  var ev = cal.createEvent(title, startAt, endAt, { description: desc });
   Logger.log('[FollowUp] Evento criado: ' + title + ' | key: ' + item.key);
   return { ok: true, action: 'created', id: ev.getId() };
 }
 
+
 function FU_buildEventTitle_(item) {
   var cfg = FU_getSheetConfig_(item.sheetName);
-  return 'Follow-up ' + (cfg.title || item.sheetName) + ' #' + item.recordId;
+  var base = (cfg.title || item.sheetName || 'Registro');
+  return 'Follow Up ' + base + ' - ' + item.recordId;
+}
+
+
+function FU_findEventsByKey_(cal, key) {
+  var win = FU_getCalendarSearchWindow_();
+  var events = cal.getEvents(win.start, win.end);
+  return events.filter(function (ev) {
+    return String(ev.getDescription() || '').indexOf(key) !== -1;
+  });
+}
+
+function FU_getCalendarSearchWindow_() {
+  var today = FU_startOfDay_(new Date());
+  return {
+    start: new Date(today.getFullYear() - 1, 0, 1),
+    end: new Date(today.getFullYear() + 3, 11, 31, 23, 59, 59)
+  };
+}
+
+function FU_withTime_(d, hh, mm, ss) {
+  var x = new Date(d);
+  x.setHours(hh || 0, mm || 0, ss || 0, 0);
+  return x;
 }
 
 function FU_buildEventDescription_(item) {

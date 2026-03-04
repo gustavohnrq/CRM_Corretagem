@@ -6,6 +6,7 @@
 var FU_CFG = {
   EMAIL: 'gustavohenriquer598@gmail.com',
   CALENDAR_ID: 'gustavohenriquer598@gmail.com',
+  TASKLIST_ID: '@default',
   EVENT_KEY_PREFIX: 'CRM_FOLLOWUP',
   DEFAULT_HOUR_START: 8,
   DAILY_HANDLER: 'FU_dailyFollowUpJob_',
@@ -292,41 +293,48 @@ function FU_slimVisita_(visita) {
 }
 
 function FU_upsertCalendarEventForItem_(item) {
-  var cal = FU_getCalendar_();
-  var calName = '';
-  try { calName = cal.getName(); } catch (e) {}
   var startAt = FU_withTime_(item.followUpDate, 6, 0, 0);
   var endAt = FU_withTime_(item.followUpDate, 18, 0, 0);
-  var matches = FU_findEventsByKey_(cal, item.key);
-  var match = matches.length ? matches[0] : null;
 
   var title = FU_buildEventTitle_(item);
   var desc = FU_buildEventDescription_(item);
 
-  Logger.log('[FollowUp] Payload agenda => cal=' + FU_CFG.CALENDAR_ID + ' (' + calName + ') | key=' + item.key + ' | title=' + title + ' | start=' + startAt.toISOString() + ' | end=' + endAt.toISOString());
+  Logger.log('[FollowUp] Payload task => list=' + FU_CFG.TASKLIST_ID + ' | key=' + item.key + ' | title=' + title + ' | due=' + FU_fmtDate_(item.followUpDate) + ' | start=06:00 | end=18:00');
   Logger.log('[FollowUp] Payload descrição => ' + desc);
 
+  var matches = FU_findTasksByKey_(item.key);
+  var match = matches.length ? matches[0] : null;
+
   if (match) {
-    match.setTitle(title);
-    match.setDescription(desc);
-    match.setTime(startAt, endAt);
+    match.title = title;
+    match.notes = desc + '\nJanela: 06:00 às 18:00';
+    match.due = FU_taskDueIso_(item.followUpDate);
+    if (match.status !== 'completed') match.status = 'needsAction';
+
+    var updated = Tasks.Tasks.update(match, FU_CFG.TASKLIST_ID, match.id);
 
     if (matches.length > 1) {
       for (var i = 1; i < matches.length; i++) {
         try {
-          matches[i].deleteEvent();
-          Logger.log('[FollowUp] Evento duplicado removido: key=' + item.key + ' | id=' + matches[i].getId());
+          Tasks.Tasks.remove(FU_CFG.TASKLIST_ID, matches[i].id);
+          Logger.log('[FollowUp] Task duplicada removida: key=' + item.key + ' | id=' + matches[i].id);
         } catch (e) {}
       }
     }
 
-    Logger.log('[FollowUp] Evento atualizado: ' + title + ' | key: ' + item.key + ' | eventId=' + match.getId());
-    return { ok: true, action: 'updated', id: match.getId() };
+    Logger.log('[FollowUp] Task atualizada: ' + title + ' | key: ' + item.key + ' | taskId=' + updated.id);
+    return { ok: true, action: 'updated', id: updated.id };
   }
 
-  var ev = cal.createEvent(title, startAt, endAt, { description: desc });
-  Logger.log('[FollowUp] Evento criado: ' + title + ' | key: ' + item.key + ' | eventId=' + ev.getId());
-  return { ok: true, action: 'created', id: ev.getId() };
+  var task = {
+    title: title,
+    notes: desc + '\nJanela: 06:00 às 18:00',
+    due: FU_taskDueIso_(item.followUpDate),
+    status: 'needsAction'
+  };
+  var created = Tasks.Tasks.insert(task, FU_CFG.TASKLIST_ID);
+  Logger.log('[FollowUp] Task criada: ' + title + ' | key: ' + item.key + ' | taskId=' + created.id);
+  return { ok: true, action: 'created', id: created.id };
 }
 
 
@@ -337,21 +345,38 @@ function FU_buildEventTitle_(item) {
 }
 
 
-function FU_findEventsByKey_(cal, key) {
-  var win = FU_getCalendarSearchWindow_();
-  var events = cal.getEvents(win.start, win.end);
-  return events.filter(function (ev) {
-    return String(ev.getDescription() || '').indexOf(key) !== -1;
-  });
+function FU_findTasksByKey_(key) {
+  FU_requireTasksApi_();
+  var all = [];
+  var pageToken = null;
+  do {
+    var resp = Tasks.Tasks.list(FU_CFG.TASKLIST_ID, {
+      showHidden: true,
+      showCompleted: true,
+      maxResults: 100,
+      pageToken: pageToken || undefined
+    });
+    var items = (resp && resp.items) ? resp.items : [];
+    for (var i = 0; i < items.length; i++) {
+      var notes = String(items[i].notes || '');
+      if (notes.indexOf(key) !== -1) all.push(items[i]);
+    }
+    pageToken = resp && resp.nextPageToken;
+  } while (pageToken);
+  return all;
 }
 
-function FU_getCalendarSearchWindow_() {
-  var today = FU_startOfDay_(new Date());
-  return {
-    start: new Date(today.getFullYear() - 1, 0, 1),
-    end: new Date(today.getFullYear() + 3, 11, 31, 23, 59, 59)
-  };
+function FU_requireTasksApi_() {
+  if (typeof Tasks === 'undefined' || !Tasks.Tasks) {
+    throw new Error('Advanced Service "Tasks API" não habilitado no projeto Apps Script.');
+  }
 }
+
+function FU_taskDueIso_(dateOnly) {
+  var d = FU_startOfDay_(dateOnly);
+  return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0)).toISOString();
+}
+
 
 function FU_withTime_(d, hh, mm, ss) {
   var x = new Date(d);
@@ -401,11 +426,8 @@ function FU_buildHumanLine_(item) {
 }
 
 function FU_getCalendar_() {
-  var cal = CalendarApp.getCalendarById(FU_CFG.CALENDAR_ID);
-  if (!cal) {
-    throw new Error('Calendário alvo não encontrado/acessível: ' + FU_CFG.CALENDAR_ID);
-  }
-  return cal;
+  // Compat: não utilizado após migração para Google Tasks.
+  return null;
 }
 
 function FU_getSheetConfig_(sheetName) {

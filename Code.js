@@ -181,7 +181,12 @@ function doGet(e) {
 }
 
 function include(filename) {
-  return HtmlService.createHtmlOutputFromFile(filename).getContent();
+  try {
+    return HtmlService.createHtmlOutputFromFile(String(filename || '').trim()).getContent();
+  } catch (err) {
+    Logger.log('[include] Falha ao incluir arquivo "' + filename + '": ' + (err && err.message ? err.message : err));
+    return '';
+  }
 }
 
 function getAppUrl() {

@@ -86,12 +86,20 @@ function ensureSheetWithHeaders_(ss, sheetName, headers) {
   const lc = sh.getLastColumn();
   const current = lc > 0 ? sh.getRange(1, 1, 1, lc).getDisplayValues()[0].map(h => String(h || "").trim()) : [];
 
-  const equal = current.length === headers.length && headers.every((h, i) => h === current[i]);
-  if (equal) return;
+  // Nunca limpa a aba para não perder linhas de dados.
+  if (!current.length || current.every(h => !String(h || "").trim())) {
+    sh.getRange(1, 1, 1, headers.length).setValues([headers]);
+    sh.getRange(1, 1, 1, headers.length).setFontWeight("bold");
+    return;
+  }
 
-  sh.clear();
-  sh.getRange(1, 1, 1, headers.length).setValues([headers]);
-  sh.getRange(1, 1, 1, headers.length).setFontWeight("bold");
+  const existingSet = new Set(current.map(h => String(h || "").trim()).filter(Boolean));
+  const missing = headers.filter(h => !existingSet.has(h));
+  if (!missing.length) return;
+
+  const startCol = sh.getLastColumn() + 1;
+  sh.getRange(1, startCol, 1, missing.length).setValues([missing]);
+  sh.getRange(1, 1, 1, sh.getLastColumn()).setFontWeight("bold");
 }
 
 function PV_listVisitasForSelect_v1() {

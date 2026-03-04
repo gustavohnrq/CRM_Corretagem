@@ -458,18 +458,20 @@ function FU_norm_(s) {
 }
 
 function FU_parseDateAny_(v) {
-  if (v instanceof Date && !isNaN(v)) return v;
+  if (v instanceof Date && !isNaN(v)) return FU_startOfDay_(v);
   var s = String(v || '').trim();
   if (!s) return null;
 
-  var d = new Date(s);
-  if (!isNaN(d)) return d;
-
+  // Prioridade BR: DD/MM/AAAA
   var m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if (m) return new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]));
+  if (m) return FU_startOfDay_(new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1])));
 
+  // ISO: AAAA-MM-DD
   m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
-  if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  if (m) return FU_startOfDay_(new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+
+  var d = new Date(s);
+  if (!isNaN(d)) return FU_startOfDay_(d);
 
   return null;
 }

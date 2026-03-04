@@ -47,6 +47,20 @@
         <form id="fatoForm">
           <div class="row">
             <div>
+              <label>Tipo_Visita</label>
+              <select name="Tipo_Visita">
+                <option value="">Selecione...</option>
+                <option>Venda</option>
+                <option>Captação</option>
+              </select>
+            </div>
+            <div>
+              <label>Próximo Follow-up</label>
+              <input name="Próximo Follow-up" id="Proximo_Follow_Up_Visita" placeholder="DD/MM/AAAA" />
+            </div>
+          </div>
+          <div class="row">
+            <div>
               <label>Id_Visita (auto)</label>
               <input name="Id_Visita" id="Id_Visita" readonly />
             </div>
@@ -570,6 +584,7 @@
 
       // ✅ aplica máscara sem conflito
       applyMaskDDMMYYYY(byId("Data_Visita"));
+      applyMaskDDMMYYYY(byId("Proximo_Follow_Up_Visita"));
 
       // money mask no campo de preço do aninhado
       ensureMoneyMaskOnce(byId("Preco_N10"));

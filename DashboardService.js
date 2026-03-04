@@ -1,256 +1,378 @@
 /**
- * DashboardService - Painel do Menu + Recalculo de métricas
- * Atualiza:
- * - Controle_Semanal (últimas 4 semanas)
- * - Funil_Mensal (mês atual)
- * Lê:
- * - Follow_Up (vencidos / hoje / próximos 7 dias)
- *
- * Fontes principais:
- * - Leads_Compradores: usa "Data Entrada" e "Status"
- * - Agenda_Visitas: usa "Data"
- * - Follow_Up: usa "Próxima Data de Contato" (ou "Próxima Data de Contato" = col exata)
+ * DashboardService v2 - sem dependência de abas calculadas (Controle_Semanal/Funil_Mensal)
  */
 
-function getDashboardData(){
-  // garante schema da agenda
+function getDashboardData(filters){
   ensureSchema_();
 
-  // Se quiser, recalcular automaticamente sempre que abrir o Menu:
-  // (deixe ligado se sua base não for gigante)
-  rebuildControleSemanal();
-  rebuildFunilMensal();
+  const f = filters || {};
+  const tz = Session.getScriptTimeZone();
+  const now = new Date();
 
-  const weekly = readControleSemanalLast4_();
-  const monthly = readFunilMensalCurrent_();
-  const follow = readFollowUpBuckets_();
+  const weekStart = f.weekStart ? dsParseDateAny_(f.weekStart) : startOfWeek_(now);
+  const weekEnd = f.weekEnd ? addDays_(dsParseDateAny_(f.weekEnd), 1) : addDays_(weekStart, 7);
 
-  const weeklyTotals = weekly.reduce((acc,r)=>({
-    ligacoes: acc.ligacoes + (r.ligacoes||0),
-    conversas: acc.conversas + (r.conversas||0),
-    visitas: acc.visitas + (r.visitas||0),
-    propostas: acc.propostas + (r.propostas||0),
-    vendas: acc.vendas + (r.vendas||0),
-  }), {ligacoes:0, conversas:0, visitas:0, propostas:0, vendas:0});
+  const funilStart = f.funilStart ? dsParseDateAny_(f.funilStart) : new Date(now.getFullYear(), now.getMonth(), 1);
+  const funilEndInclusive = f.funilEnd ? dsParseDateAny_(f.funilEnd) : now;
+  const funilEnd = addDays_(funilEndInclusive, 1);
+  const monthKey = `${fmtDate_(funilStart)} a ${fmtDate_(funilEndInclusive)}`;
+
+  const leadsCompradores = readSheetObjects_("Leads_Compradores");
+  const leadsVendedores = readSheetObjects_("Leads_Vendedores");
+  const visitas = readSheetObjects_("Fato_Visitas");
+  const propostas = readSheetObjects_("Fato_Proposta");
+  const vendas = readSheetObjects_("Fato_Venda");
+  const captacoes = readSheetObjects_("Fato_Captacao");
+  const estoque = readSheetObjects_("Estoque_Imoveis");
+
+  const perfIndex = dsBuildPerfIndex_({ leadsCompradores, leadsVendedores, visitas, propostas, vendas, captacoes });
+
+  const weekly = calcWeeklyControl_(weekStart, weekEnd, {
+    leadsCompradores, leadsVendedores, visitas, propostas, captacoes
+  }, perfIndex);
+
+  const monthly = calcMonthlyFunnel_(funilStart, funilEnd, {
+    leadsCompradores, leadsVendedores, visitas, propostas, vendas, captacoes
+  }, perfIndex);
+
+  const follow = readFollowUpBucketsByBoards_({ leadsCompradores, captacoes, visitas, propostas, vendas });
 
   return {
-    monthKey: monthly.monthKey,
-    weeklyRows: weekly.map(r=>({
-      semana: r.semana,
-      ligacoes: r.ligacoes,
-      conversas: r.conversas,
-      visitas: r.visitas,
-      propostas: r.propostas,
-      vendas: r.vendas
-    })),
-    weeklyTotals,
+    period: {
+      weekStart: fmtDate_(weekStart),
+      weekEnd: fmtDate_(addDays_(weekEnd, -1)),
+      monthKey,
+      funilStart: fmtDate_(funilStart),
+      funilEnd: fmtDate_(funilEndInclusive)
+    },
+    weekly,
     monthly,
+    kpis: calcKpiCharts_(funilStart, funilEnd, { leadsCompradores, visitas, propostas, vendas, captacoes }, perfIndex),
+    kpisPortfolio: calcPortfolioKpis_(funilStart, funilEnd, { estoque, captacoes }, perfIndex),
     follow
   };
 }
 
-/** Recalcula Controle_Semanal com base em Leads_Compradores + Agenda_Visitas */
 function rebuildControleSemanal(){
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const shOut = ss.getSheetByName("Controle_Semanal");
-  if (!shOut) throw new Error('Aba "Controle_Semanal" não existe.');
-
-  const today = new Date();
-  const weeks = lastNWeeks_(today, 4); // [{label, start, end}]
-
-  // Métricas derivadas (heurística consistente):
-  // - Ligações: Leads_Compradores com Data Entrada na semana
-  // - Conversas: Leads_Compradores com Status != "Novo" e Data Entrada na semana
-  // - Visitas: Agenda_Visitas com Data na semana
-  // - Propostas: Leads_Compradores com Status == "Proposta" na semana (Data Entrada)
-  // - Vendas: Leads_Compradores com Status == "Fechado" na semana (Data Entrada)
-  const leads = readSheetObjects_("Leads_Compradores");
-  const agenda = readSheetObjects_("Agenda_Visitas");
-
-  const rows = weeks.map(w=>{
-    const leadWeek = leads.filter(x => inRange_(parseDateAny_(x["Data Entrada"]), w.start, w.end));
-    const ligacoes = leadWeek.length;
-
-    const conversas = leadWeek.filter(x => norm_(x["Status"]) && norm_(x["Status"]) !== "novo").length;
-
-    const propostas = leadWeek.filter(x => norm_(x["Status"]) === "proposta").length;
-    const vendas = leadWeek.filter(x => norm_(x["Status"]) === "fechado").length;
-
-    const visitas = agenda.filter(x => inRange_(parseDateAny_(x["Data"]), w.start, w.end)).length;
-
-    return {
-      semana: w.label,
-      ligacoes, conversas, visitas, propostas, vendas
-    };
-  });
-
-  // Grava no Controle_Semanal (mantém cabeçalho)
-  // Formato esperado (do seu modelo): Semana | Ligações | Conversas | Visitas | Propostas | Vendas
-  shOut.getRange(2,1, Math.max(shOut.getLastRow()-1,1), shOut.getLastColumn()).clearContent();
-
-  const values = rows.map(r=>[r.semana, r.ligacoes, r.conversas, r.visitas, r.propostas, r.vendas]);
-  if (values.length){
-    shOut.getRange(2,1, values.length, 6).setValues(values);
-  }
-
-  // TOTAL na última linha (opcional)
-  const totalRow = 2 + values.length;
-  shOut.getRange(totalRow,1).setValue("TOTAL");
-  shOut.getRange(totalRow,1).setFontWeight("bold");
-  for (let c=2;c<=6;c++){
-    const colLetter = String.fromCharCode(64+c);
-    shOut.getRange(totalRow,c).setFormula(`=SUM(${colLetter}2:${colLetter}${totalRow-1})`);
-  }
+  return { ok:true, mode:"on_the_fly" };
 }
 
-/** Recalcula Funil_Mensal (mês atual) com base em Leads_Compradores + Agenda_Visitas */
 function rebuildFunilMensal(){
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const shOut = ss.getSheetByName("Funil_Mensal");
-  if (!shOut) throw new Error('Aba "Funil_Mensal" não existe.');
-
-  const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const monthEnd = new Date(now.getFullYear(), now.getMonth()+1, 1); // exclusivo
-  const monthKey = Utilities.formatDate(now, Session.getScriptTimeZone(), "yyyy-MM");
-
-  const leads = readSheetObjects_("Leads_Compradores");
-  const agenda = readSheetObjects_("Agenda_Visitas");
-
-  const leadMonth = leads.filter(x => inRange_(parseDateAny_(x["Data Entrada"]), monthStart, monthEnd));
-  const leadsCount = leadMonth.length;
-  const contatos = leadMonth.filter(x => norm_(x["Status"]) && norm_(x["Status"]) !== "novo").length;
-  const propostas = leadMonth.filter(x => norm_(x["Status"]) === "proposta").length;
-  const vendas = leadMonth.filter(x => norm_(x["Status"]) === "fechado").length;
-
-  const visitas = agenda.filter(x => inRange_(parseDateAny_(x["Data"]), monthStart, monthEnd)).length;
-
-  // Saída minimalista (padrão flexível)
-  // Colunas recomendadas: Mês | Leads | Contatos | Visitas | Propostas | Vendas | Taxa Conversão (%)
-  // Vamos preencher a linha do mês atual e calcular taxa Vendas/Leads.
-  const headers = shOut.getRange(1,1,1,shOut.getLastColumn()).getValues()[0].map(h=>String(h||"").trim());
-  const col = (name)=> headers.indexOf(name)+1;
-
-  // Se a estrutura não existir, criamos o cabeçalho padrão
-  const needsHeader =
-    headers.length < 6 || headers[0] === "" || headers[0].toLowerCase() === "mês" ? false : false;
-
-  // Grava na primeira linha disponível do mês atual (atualiza se já existir)
-  const lr = shOut.getLastRow();
-  let targetRow = -1;
-  if (lr >= 2){
-    const monthVals = shOut.getRange(2,1,lr-1,1).getValues().flat().map(x=>String(x||"").trim());
-    const idx = monthVals.findIndex(x=>x === monthKey);
-    if (idx >= 0) targetRow = idx + 2;
-  }
-  if (targetRow === -1) targetRow = lr + 1;
-
-  // Se o cabeçalho estiver vazio/errado, padroniza:
-  if (shOut.getLastColumn() < 7 || headers[0] === ""){
-    shOut.clear();
-    shOut.getRange(1,1,1,7).setValues([["Mês","Leads","Contatos","Visitas","Propostas","Vendas","Taxa Conversão (%)"]]);
-    shOut.getRange(1,1,1,7).setFontWeight("bold");
-    targetRow = 2;
-  }
-
-  const taxa = (leadsCount > 0) ? (vendas / leadsCount) : 0;
-
-  shOut.getRange(targetRow,1,1,7).setValues([[monthKey, leadsCount, contatos, visitas, propostas, vendas, taxa]]);
-  shOut.getRange(targetRow,7).setNumberFormat("0.0%");
+  return { ok:true, mode:"on_the_fly" };
 }
 
-/* ===========================
-   Leitura para o Menu
-=========================== */
-
-function readControleSemanalLast4_(){
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sh = ss.getSheetByName("Controle_Semanal");
-  if (!sh) return [];
-  const lr = sh.getLastRow();
-  if (lr < 2) return [];
-
-  // Pega até 4 linhas antes do TOTAL
-  const data = sh.getRange(2,1, lr-1, Math.min(sh.getLastColumn(),6)).getValues();
-  const cleaned = data.filter(r => String(r[0]||"").trim() && String(r[0]).toUpperCase() !== "TOTAL");
-
-  const last4 = cleaned.slice(-4);
-  return last4.map(r=>({
-    semana: r[0],
-    ligacoes: Number(r[1]||0),
-    conversas: Number(r[2]||0),
-    visitas: Number(r[3]||0),
-    propostas: Number(r[4]||0),
-    vendas: Number(r[5]||0),
-  }));
-}
-
-function readFunilMensalCurrent_(){
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sh = ss.getSheetByName("Funil_Mensal");
-  if (!sh) return { monthKey:"", funil:{}, rates:{} };
-
-  const now = new Date();
-  const monthKey = Utilities.formatDate(now, Session.getScriptTimeZone(), "yyyy-MM");
-
-  const lr = sh.getLastRow();
-  if (lr < 2) return { monthKey, funil:{leads:0,contatos:0,visitas:0,propostas:0,vendas:0}, rates:{} };
-
-  const data = sh.getRange(2,1, lr-1, Math.min(sh.getLastColumn(), 7)).getValues();
-  const row = data.map(r=>({m:String(r[0]||"").trim(), r})).find(x=>x.m === monthKey);
-
-  const leads = row ? Number(row.r[1]||0) : 0;
-  const contatos = row ? Number(row.r[2]||0) : 0;
-  const visitas = row ? Number(row.r[3]||0) : 0;
-  const propostas = row ? Number(row.r[4]||0) : 0;
-  const vendas = row ? Number(row.r[5]||0) : 0;
-
-  const rates = {
-    lead_para_contato: (leads>0)? (contatos/leads) : null,
-    contato_para_visita: (contatos>0)? (visitas/contatos) : null,
-    visita_para_proposta: (visitas>0)? (propostas/visitas) : null,
-    proposta_para_venda: (propostas>0)? (vendas/propostas) : null
+function calcWeeklyControl_(start, endEx, data, idx){
+  const metas = {
+    ligacoesVendaMin:80, ligacoesVendaMax:120,
+    visitasVendaMin:3, visitasVendaMax:5,
+    propostaVenda:1,
+    ligacoesCaptacaoMin:30, ligacoesCaptacaoMax:50,
+    visitasCaptacaoMin:3, visitasCaptacaoMax:5,
+    captacao:1
   };
 
-  return { monthKey, funil:{leads, contatos, visitas, propostas, vendas}, rates };
+  const perf = idx || dsBuildPerfIndex_(data);
+  const ligVenda = dsCountByRange_(perf.leadsCompradoresDates, start, endEx);
+  const ligCap = dsCountByRange_(perf.leadsVendedoresDates, start, endEx);
+
+  const visitasVenda = dsCountVisitasByTipoRange_(perf.visitasEntries, start, endEx, "venda");
+  const visitasCap = dsCountVisitasByTipoRange_(perf.visitasEntries, start, endEx, "captacao");
+
+  const propostasVenda = dsCountByRange_(perf.propostasDates, start, endEx);
+  const captacoesQtd = dsCountByRange_(perf.captacoesDates, start, endEx);
+
+  return {
+    metas,
+    rows: [
+      metricRow_("Frente 1 - Ligações Venda", ligVenda, metas.ligacoesVendaMin, metas.ligacoesVendaMax),
+      metricRow_("Frente 1 - Visitas Venda", visitasVenda, metas.visitasVendaMin, metas.visitasVendaMax),
+      metricRow_("Frente 1 - Proposta Venda", propostasVenda, metas.propostaVenda, metas.propostaVenda),
+      metricRow_("Frente 2 - Ligações Captação", ligCap, metas.ligacoesCaptacaoMin, metas.ligacoesCaptacaoMax),
+      metricRow_("Frente 2 - Visitas Captação", visitasCap, metas.visitasCaptacaoMin, metas.visitasCaptacaoMax),
+      metricRow_("Frente 2 - Captação", captacoesQtd, metas.captacao, metas.captacao)
+    ]
+  };
 }
 
-function readFollowUpBuckets_(){
-  const rows = readSheetObjects_("Follow_Up"); // se o nome da aba for diferente, ajuste aqui
-  const tz = Session.getScriptTimeZone();
-  const today = startOfDay_(new Date());
+function calcMonthlyFunnel_(start, endEx, data, idx){
+  const perf = idx || dsBuildPerfIndex_(data);
+  const leads = dsCountByRange_(perf.leadsCompradoresDates, start, endEx);
+  const visitas = dsCountByRange_(perf.visitasDates, start, endEx);
+  const propostas = dsCountByRange_(perf.propostasDates, start, endEx);
+  const vendas = dsCountByRange_(perf.vendasDates, start, endEx);
+  const captacoes = dsCountByRange_(perf.captacoesDates, start, endEx);
 
-  const plus7 = new Date(today.getTime() + 7*24*60*60*1000);
+  const rates = {
+    leads_para_visitas: leads>0 ? visitas/leads : null,
+    visitas_para_propostas: visitas>0 ? propostas/visitas : null,
+    propostas_para_vendas: propostas>0 ? vendas/propostas : null,
+    lead_vendedor_para_captacao: perf.leadsVendedoresTotal>0 ? captacoes/perf.leadsVendedoresTotal : null
+  };
 
-  // tenta encontrar a coluna de próxima data
-  const keyNext = findKey_(rows, ["Próxima Data de Contato","Próxima Data","Próximo Follow-up","Próximo Contato","Próxima Data de Contato"]);
+  return { funil:{leads,visitas,propostas,vendas,captacoes}, rates };
+}
 
-  const mapped = rows.map(x=>{
-    const dt = parseDateAny_(x[keyNext]);
+
+function calcKpiCharts_(start, endEx, data, idx){
+  const buckets = buildWeeklyBuckets_(start, endEx);
+
+  const perf = idx || dsBuildPerfIndex_(data);
+  const leads = dsCountByRange_(perf.leadsCompradoresDates, start, endEx);
+  const visitas = dsCountByRange_(perf.visitasDates, start, endEx);
+  const propostas = dsCountByRange_(perf.propostasDates, start, endEx);
+  const vendas = dsCountByRange_(perf.vendasDates, start, endEx);
+  const captacoes = dsCountByRange_(perf.captacoesDates, start, endEx);
+
+  const periodDays = Math.max(1, Math.ceil((endEx.getTime()-start.getTime())/(24*60*60*1000)));
+
+  const seriesLeadsVisitas = buckets.map(b=>{
+    const l = dsCountByRange_(perf.leadsCompradoresDates, b.start, b.end);
+    const v = dsCountByRange_(perf.visitasDates, b.start, b.end);
+    return l>0 ? v/l : 0;
+  });
+
+  const seriesVisitasPropostas = buckets.map(b=>{
+    const v = dsCountByRange_(perf.visitasDates, b.start, b.end);
+    const p = dsCountByRange_(perf.propostasDates, b.start, b.end);
+    return v>0 ? p/v : 0;
+  });
+
+  const seriesPropostasVendas = buckets.map(b=>{
+    const p = dsCountByRange_(perf.propostasDates, b.start, b.end);
+    const v = dsCountByRange_(perf.vendasDates, b.start, b.end);
+    return p>0 ? v/p : 0;
+  });
+
+  const seriesCaptacoesSemana = buckets.map(b=> dsCountByRange_(perf.captacoesDates, b.start, b.end));
+
+  const convLeadsVisitas = leads>0 ? visitas/leads : 0;
+  const convVisitasPropostas = visitas>0 ? propostas/visitas : 0;
+  const convPropostasVendas = propostas>0 ? vendas/propostas : 0;
+  const mesesPeriodo = Math.max(1, Math.ceil(periodDays / 30));
+  const metaCaptacoesPeriodo = 5 * mesesPeriodo;
+
+  return [
+    { key:"kpi1", title:"Conversão Leads → Visitas", value: convLeadsVisitas, display: pctValue_(convLeadsVisitas), target: 0.15, targetDisplay:"Meta 15%", series: seriesLeadsVisitas, max: 1 },
+    { key:"kpi2", title:"Conversão Visitas → Propostas", value: convVisitasPropostas, display: pctValue_(convVisitasPropostas), target: 0.35, targetDisplay:"Meta 35%", series: seriesVisitasPropostas, max: 1 },
+    { key:"kpi3", title:"Conversão Propostas → Vendas", value: convPropostasVendas, display: pctValue_(convPropostasVendas), target: 0.30, targetDisplay:"Meta 30%", series: seriesPropostasVendas, max: 1 },
+    {
+      key:"kpi4",
+      title:"Captações no Período",
+      value: captacoes,
+      display: numValue_(captacoes),
+      target: metaCaptacoesPeriodo,
+      targetDisplay:`Meta do período (${mesesPeriodo} mês(es) × 5): ${numValue_(metaCaptacoesPeriodo)}`,
+      series: seriesCaptacoesSemana,
+      max: Math.max(1, ...seriesCaptacoesSemana, metaCaptacoesPeriodo, captacoes, 1)
+    }
+  ];
+}
+
+function dsBuildPerfIndex_(data){
+  const leadsCompradores = data.leadsCompradores || [];
+  const leadsVendedores = data.leadsVendedores || [];
+  const visitas = data.visitas || [];
+  const propostas = data.propostas || [];
+  const vendas = data.vendas || [];
+  const captacoes = data.captacoes || [];
+
+  const visitasEntries = visitas.map(r => ({
+    date: dsParseDateAny_(pick_(r,["Data_Visita","Data Visita","Data"])),
+    tipo: dsNorm_(pick_(r,["Tipo_Visita","Tipo Visita"]))
+  })).filter(x => x.date);
+
+  return {
+    leadsCompradoresDates: leadsCompradores.map(r=>dsParseDateAny_(pick_(r,["Data Entrada","DataEntrada"]))).filter(Boolean),
+    leadsVendedoresDates: leadsVendedores.map(r=>dsParseDateAny_(pick_(r,["Data Entrada","DataEntrada"]))).filter(Boolean),
+    visitasEntries,
+    visitasDates: visitasEntries.map(x=>x.date),
+    propostasDates: propostas.map(r=>dsParseDateAny_(pick_(r,["Data"]))).filter(Boolean),
+    vendasDates: vendas.map(r=>dsParseDateAny_(pick_(r,["Data"]))).filter(Boolean),
+    captacoesDates: captacoes.map(r=>dsParseDateAny_(pick_(r,["DataCadastro","Data Cadastro"]))).filter(Boolean),
+    leadsVendedoresTotal: leadsVendedores.length
+  };
+}
+
+function dsCountByRange_(dates, start, endEx){
+  let n = 0;
+  for (let i=0;i<(dates||[]).length;i++) if (dsInRange_(dates[i], start, endEx)) n++;
+  return n;
+}
+
+function dsCountVisitasByTipoRange_(entries, start, endEx, tipoTarget){
+  let n = 0;
+  const target = dsNorm_(tipoTarget);
+  for (let i=0;i<(entries||[]).length;i++){
+    const e = entries[i];
+    if (!dsInRange_(e.date, start, endEx)) continue;
+    if (target === 'venda') {
+      if (e.tipo === 'venda' || e.tipo === '') n++;
+    } else if (e.tipo === target) {
+      n++;
+    }
+  }
+  return n;
+}
+
+function buildWeeklyBuckets_(start, endEx){
+  const out = [];
+  let cur = new Date(start);
+  while (cur < endEx){
+    const next = addDays_(cur, 7);
+    out.push({ start:new Date(cur), end: next < endEx ? next : new Date(endEx) });
+    cur = next;
+    if (out.length > 24) break;
+  }
+  if (!out.length) out.push({ start:new Date(start), end:new Date(endEx) });
+  return out;
+}
+
+function dsParseMoney_(v){
+  const s = String(v || "").trim();
+  if (!s) return 0;
+  const n = Number(s.replace(/[R$\s]/g,"").replace(/\./g,"").replace(",","."));
+  return isNaN(n) ? 0 : n;
+}
+
+function pctValue_(x){
+  return `${Math.round((Number(x)||0)*1000)/10}%`;
+}
+
+function numValue_(x){
+  const n = Number(x||0);
+  return (Math.round(n*100)/100).toString().replace('.', ',');
+}
+
+
+function calcPortfolioKpis_(start, endEx, data, idx){
+  const estoque = data.estoque || [];
+  const captacoes = data.captacoes || [];
+
+  // Empresa (estoque total, sem data)
+  const estoqueDivBairro = groupByBairroCount_(estoque, ["Bairro"], ["Valor","Preço","Preco"]);
+  const estoqueBairrosCom30 = groupByBairroAvg_(estoque, ["Bairro"], ["Valor","Preço","Preco"]).filter(x => x.qtd > 30).slice(0,10);
+
+  // Minha carteira (captações)
+  const carteiraDivBairro = groupByBairroCount_(captacoes, ["Bairro"], ["Valor"]);
+  const carteiraTotalQtd = captacoes.length;
+  const carteiraTotalValor = captacoes.reduce((acc,r)=>acc + dsParseMoney_(pick_(r,["Valor"])),0);
+  const carteiraTicketMedio = carteiraTotalQtd>0 ? (carteiraTotalValor / carteiraTotalQtd) : 0;
+
+  // Meta: 5 captações/mês (no período filtrado)
+  const perf = idx || dsBuildPerfIndex_(data);
+  const captacoesPeriodoQtd = dsCountByRange_(perf.captacoesDates, start, endEx);
+  const days = Math.max(1, Math.ceil((endEx.getTime() - start.getTime()) / (24*60*60*1000)));
+  const mesesPeriodo = Math.max(1, Math.ceil(days / 30));
+  const metaPeriodo = 5 * mesesPeriodo;
+
+  return {
+    empresa: {
+      divisaoBairro: estoqueDivBairro,
+      topBairrosCom30: estoqueBairrosCom30
+    },
+    carteira: {
+      divisaoBairro: carteiraDivBairro,
+      ticketMedio: carteiraTicketMedio,
+      totalQtd: carteiraTotalQtd,
+      totalValor: carteiraTotalValor
+    },
+    captacaoMeta: {
+      periodoQtd: captacoesPeriodoQtd,
+      mesesPeriodo: mesesPeriodo,
+      metaPeriodo: metaPeriodo,
+      atingimento: metaPeriodo > 0 ? (captacoesPeriodoQtd / metaPeriodo) : 0
+    }
+  };
+}
+
+function groupByBairroCount_(rows, bairroCandidates, valorCandidates){
+  const map = {};
+  (rows||[]).forEach(r=>{
+    const bairro = String(pick_(r, bairroCandidates) || "Sem bairro").trim() || "Sem bairro";
+    if (!map[bairro]) map[bairro] = { bairro, qtd:0, soma:0 };
+    map[bairro].qtd += 1;
+    map[bairro].soma += dsParseMoney_(pick_(r, valorCandidates));
+  });
+  return Object.values(map).sort((a,b)=>b.qtd-a.qtd).slice(0,10);
+}
+
+function groupByBairroAvg_(rows, bairroCandidates, valorCandidates){
+  const map = {};
+  (rows||[]).forEach(r=>{
+    const bairro = String(pick_(r, bairroCandidates) || "Sem bairro").trim() || "Sem bairro";
+    const v = dsParseMoney_(pick_(r, valorCandidates));
+    if (!v) return;
+    if (!map[bairro]) map[bairro] = { bairro, qtd:0, soma:0, avg:0 };
+    map[bairro].qtd += 1;
+    map[bairro].soma += v;
+  });
+  return Object.values(map).map(x=>({ ...x, avg: x.qtd>0 ? x.soma/x.qtd : 0 })).sort((a,b)=>b.avg-a.avg);
+}
+
+function brlValue_(n){
+  const v = Number(n||0);
+  return v.toLocaleString("pt-BR", { style:"currency", currency:"BRL" });
+}
+
+function readFollowUpBucketsByBoards_(data){
+  const d = data || {};
+  const boards = {
+    leads: readFollowFromRows_(d.leadsCompradores, "Leads_Compradores", ["Nome"], ["Telefone"], ["Próximo Follow-up", "Próxima Data de Contato"]),
+    captacoes: readFollowFromRows_(d.captacoes, "Fato_Captacao", ["Captadores", "Proprietario"], ["Captadores"], ["Próximo Follow-up", "Próxima Data de Contato"]),
+    visitas: readFollowFromRows_(d.visitas, "Fato_Visitas", ["Id_Visita"], ["Id_Imovel"], ["Próximo Follow-up", "Próxima Data de Contato"]),
+    propostas: readFollowFromRows_(d.propostas, "Fato_Proposta", ["Id_Proposta"], ["Id_Visita"], ["Próximo Follow-up", "Próxima Data de Contato"]),
+    vendas: readFollowFromRows_(d.vendas, "Fato_Venda", ["Id_Venda"], ["Id_Proposta"], ["Próximo Follow-up", "Próxima Data de Contato"])
+  };
+  return boards;
+}
+
+function readFollowFromRows_(rows, sheetName, nameCandidates, phoneCandidates, dateCandidates){
+  const src = Array.isArray(rows) ? rows : readSheetObjects_(sheetName);
+  const today = dsStartOfDay_(new Date());
+  const plus7 = addDays_(today, 7);
+
+  const all = src.map(r=>{
+    const proximoRaw = pick_(r, dateCandidates);
+    const dt = dsParseDateAny_(proximoRaw);
     return {
-      nome: x["Nome"] || x["Nome Proprietário"] || x["Cliente"] || "",
-      tipo: x["Tipo (Comprador/Vendedor)"] || x["Tipo"] || "",
-      telefone: x["Telefone"] || "",
-      proximo: x[keyNext] || "",
+      nome: pick_(r, nameCandidates),
+      telefone: pick_(r, phoneCandidates),
+      proximo: proximoRaw,
       dt
     };
-  }).filter(x=>x.dt); // só com data válida
+  }).filter(x=>x.dt);
 
-  const overdue = mapped.filter(x => x.dt < today);
-  const todayItems = mapped.filter(x => sameDay_(x.dt, today));
-  const week = mapped.filter(x => x.dt > today && x.dt < plus7);
-
-  // ordena
-  overdue.sort((a,b)=>a.dt-b.dt);
-  todayItems.sort((a,b)=>a.dt-b.dt);
-  week.sort((a,b)=>a.dt-b.dt);
-
-  return { overdue, today: todayItems, week };
+  return {
+    overdue: all.filter(x=>x.dt < today).sort((a,b)=>a.dt-b.dt),
+    today: all.filter(x=>dsSameDay_(x.dt,today)).sort((a,b)=>a.dt-b.dt),
+    week: all.filter(x=>x.dt > today && x.dt < plus7).sort((a,b)=>a.dt-b.dt)
+  };
 }
 
-/* ===========================
-   Helpers
-=========================== */
+
+function metricRow_(label, atual, min, max){
+  let status = "red";
+  if (atual >= min && atual <= max) status = "green";
+  else if (atual > max || (atual >= Math.max(1, Math.floor(min*0.7)))) status = "yellow";
+  return { label, atual, min, max, status };
+}
+
+function pick_(obj, candidates){
+  if (!obj) return "";
+  const map = {};
+  Object.keys(obj).forEach(k=> map[normHeader_(k)] = k);
+  for (const c of (candidates || [])){
+    const f = map[normHeader_(c)];
+    if (f) return obj[f] || "";
+  }
+  return "";
+}
+
+function normHeader_(s){
+  return String(s||"")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g,"")
+    .toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(/^_+|_+$/g,"");
+}
 
 function readSheetObjects_(sheetName){
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -260,93 +382,39 @@ function readSheetObjects_(sheetName){
   const lc = sh.getLastColumn();
   if (lr < 2 || lc < 1) return [];
 
-  const headers = sh.getRange(1,1,1,lc).getValues()[0].map(h=>String(h||"").trim());
-  const data = sh.getRange(2,1,lr-1,lc).getValues();
+  const headers = sh.getRange(1,1,1,lc).getDisplayValues()[0].map(h=>String(h||"").trim());
+  const data = sh.getRange(2,1,lr-1,lc).getDisplayValues();
 
   return data.map(row=>{
     const obj = {};
-    for (let i=0;i<headers.length;i++){
-      if (headers[i]) obj[headers[i]] = row[i];
-    }
+    for (let i=0;i<headers.length;i++) if (headers[i]) obj[headers[i]] = row[i];
     return obj;
   });
 }
 
-function parseDateAny_(v){
+function dsParseDateAny_(v){
   if (!v) return null;
-  if (Object.prototype.toString.call(v) === "[object Date]" && !isNaN(v.getTime())) return startOfDay_(v);
-
+  if (Object.prototype.toString.call(v) === "[object Date]" && !isNaN(v.getTime())) return dsStartOfDay_(v);
   const s = String(v).trim();
   if (!s) return null;
-
-  // yyyy-mm-dd
-  if (/^\d{4}-\d{2}-\d{2}/.test(s)){
-    const [y,m,d] = s.slice(0,10).split("-").map(Number);
-    const dt = new Date(y, m-1, d);
-    return isNaN(dt.getTime()) ? null : startOfDay_(dt);
+  let m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (m){
+    const dt = new Date(Number(m[3]), Number(m[2])-1, Number(m[1]));
+    return isNaN(dt.getTime()) ? null : dsStartOfDay_(dt);
   }
-
-  // dd/mm/yyyy ou dd/mm
-  if (/^\d{1,2}\/\d{1,2}(\/\d{2,4})?$/.test(s)){
-    const parts = s.split("/");
-    const d = Number(parts[0]);
-    const m = Number(parts[1]);
-    let y = parts[2] ? Number(parts[2]) : (new Date()).getFullYear();
-    if (y < 100) y += 2000;
-    const dt = new Date(y, m-1, d);
-    return isNaN(dt.getTime()) ? null : startOfDay_(dt);
+  m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (m){
+    const dt = new Date(Number(m[1]), Number(m[2])-1, Number(m[3]));
+    return isNaN(dt.getTime()) ? null : dsStartOfDay_(dt);
   }
-
-  // fallback: Date.parse
   const t = Date.parse(s);
-  if (!isNaN(t)) return startOfDay_(new Date(t));
-
-  return null;
+  return isNaN(t) ? null : dsStartOfDay_(new Date(t));
 }
 
-function inRange_(dt, start, endExclusive){
-  if (!dt) return false;
-  return dt >= start && dt < endExclusive;
-}
-
-function startOfDay_(dt){
-  const x = new Date(dt);
-  x.setHours(0,0,0,0);
-  return x;
-}
-
-function sameDay_(a, b){
-  return a && b && a.getTime() === b.getTime();
-}
-
-function norm_(s){
-  return String(s||"").trim().toLowerCase();
-}
-
-function lastNWeeks_(today, n){
-  // semana = segunda a domingo (mais útil para seu ciclo seg-sáb)
-  const end = startOfDay_(today);
-  const day = end.getDay(); // 0 domingo..6 sábado
-  const diffToMonday = (day === 0) ? 6 : (day - 1);
-  const monday = new Date(end.getTime() - diffToMonday*24*60*60*1000);
-
-  const weeks = [];
-  for (let i=n-1;i>=0;i--){
-    const start = new Date(monday.getTime() - i*7*24*60*60*1000);
-    const endEx = new Date(start.getTime() + 7*24*60*60*1000);
-    const label = Utilities.formatDate(start, Session.getScriptTimeZone(), "yyyy-'W'ww");
-    weeks.push({ label, start, end: endEx });
-  }
-  return weeks;
-}
-
-function findKey_(rows, candidates){
-  if (!rows || rows.length === 0) return candidates[0];
-  const keys = Object.keys(rows[0] || {});
-  for (const c of candidates){
-    const hit = keys.find(k => k.toLowerCase() === c.toLowerCase());
-    if (hit) return hit;
-  }
-  // fallback: primeira candidata
-  return candidates[0];
-}
+function dsStartOfDay_(dt){ const x = new Date(dt); x.setHours(0,0,0,0); return x; }
+function dsSameDay_(a,b){ return a && b && a.getTime() === b.getTime(); }
+function dsInRange_(dt,start,endEx){ return !!dt && dt >= start && dt < endEx; }
+function addDays_(dt, n){ return new Date(dt.getTime() + n*24*60*60*1000); }
+function startOfWeek_(dt){ const d = dsStartOfDay_(dt); const wd=d.getDay(); const diff=(wd===0?6:wd-1); return addDays_(d,-diff); }
+function fmtDate_(dt){ return Utilities.formatDate(dt, Session.getScriptTimeZone(), "dd/MM/yyyy"); }
+function dsNorm_(s){ return String(s||"").trim().toLowerCase(); }

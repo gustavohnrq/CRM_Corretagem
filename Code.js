@@ -1943,8 +1943,8 @@ function _EST_findCol_(headers, wanted) {
 /**
  * ✅ Dropdown de imóveis para selects do sistema
  * Retorna [{id,label}] onde:
- * - id = Codigo (novo) (ou Código antigo, se existir)
- * - label = "Codigo • Tipo • Valor • Bairro"
+ * - id = Código (novo) (ou Código antigo, se existir)
+ * - label = "Código • Tipo • Valor • Bairro"
  */
 function listImoveisForSelect() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -1956,12 +1956,12 @@ function listImoveisForSelect() {
   const lc = headers.length;
   if (lr < 2 || lc < 1) return [];
 
-  const idxCodigo  = _EST_findCol_(headers, ["Codigo", "Código"]);
+  const idxCódigo  = _EST_findCol_(headers, ["Código", "Código"]);
   const idxTipo    = _EST_findCol_(headers, ["Tipo"]);
   const idxValor   = _EST_findCol_(headers, ["Valor", "Preço", "Preco"]);
   const idxBairro  = _EST_findCol_(headers, ["Bairro"]);
 
-  if (idxCodigo === undefined) throw new Error('Estoque_Imoveis: coluna "Codigo" não encontrada.');
+  if (idxCódigo === undefined) throw new Error('Estoque_Imoveis: coluna "Código" não encontrada.');
 
   const range = sh.getRange(2, 1, lr - 1, lc);
   const values = range.getValues();
@@ -1970,15 +1970,15 @@ function listImoveisForSelect() {
   const out = [];
 
   for (let i = 0; i < values.length; i++) {
-    const codigo = String(values[i][idxCodigo] ?? "").trim();
-    if (!codigo) continue;
+    const Código = String(values[i][idxCódigo] ?? "").trim();
+    if (!Código) continue;
 
     const tipo   = (idxTipo   !== undefined) ? String(values[i][idxTipo] ?? "").trim() : "";
     const valor  = (idxValor  !== undefined) ? String(disp[i][idxValor]  ?? "").trim() : "";
     const bairro = (idxBairro !== undefined) ? String(values[i][idxBairro] ?? "").trim() : "";
 
-    const label = `${codigo} • ${tipo || "-"} • ${valor || "-"} • ${bairro || "-"}`;
-    out.push({ id: codigo, label });
+    const label = `${Código} • ${tipo || "-"} • ${valor || "-"} • ${bairro || "-"}`;
+    out.push({ id: Código, label });
   }
 
   out.sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
@@ -1992,7 +1992,7 @@ function listImoveisForSelect() {
 
 const EST_CFG = {
   SHEET: "Estoque_Imoveis",
-  HEADERS: ["Codigo","Captadores","Tipo","Quartos","Valor","Endereco","Bairro","PublicacaoNaInternet","Exclusivo"]
+  HEADERS: ["Código","Captadores","Tipo","Quartos","Valor","Endereco","Bairro","PublicacaoNaInternet","Exclusivo"]
 };
 
 function EST_getDistinctFilters_v1() {
@@ -2062,8 +2062,8 @@ function CAP_listForPanel_v1() {
     return undefined;
   }
 
-  const idxId = idxByCandidates_(["Código", "Codigo", "ID", "Id", "id"]);
-  if (idxId === undefined) throw new Error('Fato_Captacao: coluna de ID não encontrada (Código/Codigo/ID).');
+  const idxId = idxByCandidates_(["Código", "Código", "ID", "Id", "id"]);
+  if (idxId === undefined) throw new Error('Fato_Captacao: coluna de ID não encontrada (Código/Código/ID).');
 
   const idxTipo = idxByCandidates_(["Tipo"]);
   const idxBairro = idxByCandidates_(["Bairro"]);
@@ -2114,7 +2114,7 @@ function EST_listForPanelFiltered_v1(filters) {
   headers.forEach((h,i)=>{ if(h) idx[h]=i; });
 
   // ✅ inclui Captadores
-  const need = ["Codigo","Bairro","Quartos","Valor","Tipo","Captadores"];
+  const need = ["Código","Bairro","Quartos","Valor","Tipo","Captadores"];
   need.forEach(k=>{
     if (idx[k] === undefined) throw new Error(`Estoque_Imoveis: coluna "${k}" não encontrada.`);
   });
@@ -2139,8 +2139,8 @@ function EST_listForPanelFiltered_v1(filters) {
   const out = [];
 
   for (let i=0;i<data.length;i++){
-    const codigo = String(data[i][idx["Codigo"]] ?? "").trim();
-    if (!codigo) continue;
+    const Código = String(data[i][idx["Código"]] ?? "").trim();
+    if (!Código) continue;
 
     const captadores = String(data[i][idx["Captadores"]] ?? "").trim();
     const bairro = String(data[i][idx["Bairro"]] ?? "").trim();
@@ -2156,11 +2156,11 @@ function EST_listForPanelFiltered_v1(filters) {
     if (vmax !== null && (valorNum === null || valorNum > vmax)) continue;
 
     out.push({
-      id: codigo, // ✅ continua sendo o ID real
-      // ✅ tira o codigo daqui para não duplicar
+      id: Código, // ✅ continua sendo o ID real
+      // ✅ tira o Código daqui para não duplicar
       label: `${captadores || "-"} • ${tipo || "-"} • ${quartos || "-"}Q • ${bairro || "-"} • ${valorDisp || "-"}`,
       raw: {
-        Codigo: codigo,
+        Código: Código,
         Captadores: captadores,
         Tipo: tipo,
         Quartos: quartos,

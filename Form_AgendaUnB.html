@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <?!= include('Estilos'); ?>
+    <?!= include('JsBase'); ?>
+    <style>
+      .grid70{ display:grid; grid-template-columns:7fr 3fr; gap:14px; align-items:start; }
+      @media (max-width: 980px){ .grid70{ grid-template-columns:1fr; } }
+      .detailGrid{ display:grid; grid-template-columns:repeat(2,minmax(180px,1fr)); gap:8px; }
+    </style>
+  </head>
+  <body>
+    <div class="topbar">
+      <div>
+        <div class="title">Agenda UnB</div>
+        <div class="sub">Controle das atividades acadêmicas + integração com agenda pessoal</div>
+      </div>
+      <span class="pill">UnB</span>
+    </div>
+
+    <div class="grid70">
+      <div class="card">
+        <div class="btns" style="margin-bottom:10px;">
+          <button type="button" class="secondary" onclick="nav('Form_MenuGeral')">← Menu Geral</button>
+          <button type="button" class="secondary" onclick="syncAgendaNow()">Atualizar agenda agora</button>
+          <button type="button" class="secondary" onclick="reloadAll()">Atualizar painel</button>
+        </div>
+
+        <h3>Registros (70%)</h3>
+        <div id="kpisUnb" class="hint"></div>
+
+        <div class="card" style="margin:10px 0 0 0;">
+          <h3>Atividades cadastradas</h3>
+          <div id="registrosUnb" class="list" style="max-height:300px;"></div>
+        </div>
+
+        <div class="grid" style="grid-template-columns:1fr 1fr; gap:12px; margin-top:12px;">
+          <div class="card" style="margin:0;">
+            <h3>Tarefas de hoje</h3>
+            <div id="hojeUnb" class="list"></div>
+          </div>
+          <div class="card" style="margin:0;">
+            <h3>Próximos 7 dias</h3>
+            <div id="semanaUnb" class="list"></div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:12px;">
+          <h3>Atividades por matéria</h3>
+          <div id="materiasUnb" class="list"></div>
+        </div>
+
+        <div class="card" style="margin-top:12px;">
+          <h3>Minha Agenda Google</h3>
+          <div class="hint">Calendário pessoal incorporado. Após sincronizar, recarregue para refletir atualizações.</div>
+          <div style="margin-top:10px; border:1px solid var(--line); border-radius:12px; overflow:hidden; height:620px;">
+            <iframe id="agendaUnbFrame" title="Agenda UnB" src="https://calendar.google.com/calendar/embed?src=gustavohenriquer598%40gmail.com&ctz=America%2FSao_Paulo" style="border:0; width:100%; height:100%;" frameborder="0" scrolling="no"></iframe>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Novo cadastro / Edição (30%)</h3>
+
+        <datalist id="dlMateria"></datalist>
+        <datalist id="dlAtividade"></datalist>
+        <datalist id="dlDescricao"></datalist>
+        <datalist id="dlPrioridade"></datalist>
+        <datalist id="dlStatus"></datalist>
+
+        <form id="frmUnb" onsubmit="saveAtividade(event)">
+          <label>ID</label>
+          <input id="ID" name="ID" placeholder="Automático" />
+
+          <label>Matéria</label>
+          <input id="Matéria" name="Matéria" list="dlMateria" placeholder="Selecione da lista ou digite novo" required />
+
+          <label>Atividade</label>
+          <input id="Atividade" name="Atividade" list="dlAtividade" placeholder="Selecione da lista ou digite novo" required />
+
+          <label>Descrição</label>
+          <input id="Descrição" name="Descrição" list="dlDescricao" placeholder="Selecione da lista ou digite novo" />
+
+          <label>Data</label>
+          <input type="date" id="Data" name="Data" required />
+
+          <label>Hora</label>
+          <input type="time" id="Hora" name="Hora" />
+
+          <label>Status</label>
+          <input id="Status" name="Status" list="dlStatus" value="Aberto" placeholder="Selecione da lista ou digite novo" />
+
+          <label>Prioridade</label>
+          <input id="Prioridade" name="Prioridade" list="dlPrioridade" value="Média" placeholder="Selecione da lista ou digite novo" />
+
+          <div class="btns" style="margin-top:10px;">
+            <button type="submit" class="ok">Salvar</button>
+            <button type="button" class="secondary" onclick="newRecord()">+ Novo</button>
+            <button type="button" class="danger" onclick="deleteAtividade()">Excluir</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <script>
+      let ALL = [];
+
+      function syncAgendaNow(){
+        google.script.run
+          .withSuccessHandler(function(r){
+            toast(`Agenda atualizada. Criados: ${r.calendar.created}, atualizados: ${r.calendar.updated}.`);
+            refreshCalendarEmbed();
+            reloadAll();
+          })
+          .withFailureHandler(function(e){ toast(e.message || e); })
+          .FU_syncAgendaNow_v1();
+      }
+
+      function reloadAll(){
+        loadDashboard();
+        loadFieldOptions();
+      }
+
+      function saveAtividade(ev){
+        ev.preventDefault();
+        const obj = formToObject('frmUnb');
+        google.script.run
+          .withSuccessHandler(function(){
+            toast('Atividade salva com sucesso.');
+            newRecord();
+            reloadAll();
+            refreshCalendarEmbed();
+          })
+          .withFailureHandler(function(e){ toast(e.message || e); })
+          .UNB_upsertAtividade(obj);
+      }
+
+      function deleteAtividade(){
+        const id = byId('ID').value.trim();
+        if (!id) return toast('Informe o ID para excluir.');
+        google.script.run
+          .withSuccessHandler(function(){
+            toast('Atividade excluída.');
+            newRecord();
+            reloadAll();
+            refreshCalendarEmbed();
+          })
+          .withFailureHandler(function(e){ toast(e.message || e); })
+          .UNB_deleteAtividade(id);
+      }
+
+      function newRecord(){
+        clearForm('frmUnb');
+        byId('Status').value = 'Aberto';
+        byId('Prioridade').value = 'Média';
+      }
+
+      function loadDashboard(){
+        google.script.run
+          .withSuccessHandler(renderDashboard)
+          .withFailureHandler(function(e){ toast(e.message || e); })
+          .UNB_getDashboardData();
+      }
+
+      function loadFieldOptions(){
+        google.script.run
+          .withSuccessHandler(function(opts){
+            fillDataList('dlMateria', opts.materias || []);
+            fillDataList('dlAtividade', opts.atividades || []);
+            fillDataList('dlDescricao', opts.descricoes || []);
+            fillDataList('dlPrioridade', mergeDefaultOptions(['Alta', 'Média', 'Baixa'], opts.prioridades || []));
+            fillDataList('dlStatus', mergeDefaultOptions(['Aberto', 'Em andamento', 'Concluído'], opts.status || []));
+          })
+          .withFailureHandler(function(e){ toast(e.message || e); })
+          .UNB_getFieldOptions();
+      }
+
+      function mergeDefaultOptions(base, arr){
+        const set = new Set(base || []);
+        (arr || []).forEach(x => set.add(x));
+        return [...set];
+      }
+
+      function fillDataList(id, items){
+        const el = byId(id);
+        el.innerHTML = '';
+        (items || []).forEach(v => {
+          const opt = document.createElement('option');
+          opt.value = v;
+          el.appendChild(opt);
+        });
+      }
+
+      function renderDashboard(d){
+        ALL = d.all || [];
+        byId('kpisUnb').innerHTML = `Total: <b>${d.totais.total}</b> • Abertas: <b>${d.totais.abertas}</b> • Hoje: <b>${d.totais.hoje}</b> • 7 dias: <b>${d.totais.semana}</b>`;
+
+        renderRegistros(ALL);
+        renderSimple('materiasUnb', d.materias, x => `${x.materia} • ${x.qtd}`);
+        renderSimple('hojeUnb', d.hoje, formatAtividade);
+        renderSimple('semanaUnb', d.semana, formatAtividade);
+      }
+
+      function renderRegistros(arr){
+        const el = byId('registrosUnb');
+        el.innerHTML = '';
+        if (!arr || !arr.length){
+          el.innerHTML = '<div class="hint">Sem registros ainda.</div>';
+          return;
+        }
+        arr.forEach(x => {
+          const div = document.createElement('div');
+          div.className = 'item';
+          div.innerHTML = `
+            <b>#${escapeHtml(x.ID || '-')} • ${escapeHtml(x['Matéria'] || 'Sem matéria')}</b>
+            <div class="detailGrid">
+              <small><b>Atividade:</b> ${escapeHtml(x.Atividade || '-')}</small>
+              <small><b>Status:</b> ${escapeHtml(x.Status || 'Aberto')}</small>
+              <small><b>Data:</b> ${escapeHtml(x.Data || '-')}</small>
+              <small><b>Hora:</b> ${escapeHtml(x.Hora || '-')}</small>
+              <small><b>Prioridade:</b> ${escapeHtml(x.Prioridade || '-')}</small>
+              <small><b>Follow-up:</b> ${escapeHtml(x['Próximo Follow-up'] || '-')}</small>
+              <small style="grid-column:1 / -1;"><b>Descrição:</b> ${escapeHtml(x['Descrição'] || '-')}</small>
+            </div>
+          `;
+          div.onclick = function(){ setFormFromObject('frmUnb', x); };
+          el.appendChild(div);
+        });
+      }
+
+      function renderSimple(elId, arr, mapFn){
+        const el = byId(elId);
+        el.innerHTML = '';
+        if (!arr || !arr.length){
+          el.innerHTML = '<div class="hint">Sem itens.</div>';
+          return;
+        }
+        arr.forEach(x => {
+          const div = document.createElement('div');
+          div.className = 'item';
+          div.innerHTML = `<small>${escapeHtml(mapFn(x))}</small>`;
+          div.onclick = function(){ setFormFromObject('frmUnb', x); };
+          el.appendChild(div);
+        });
+      }
+
+      function formatAtividade(x){
+        return `${x['Próximo Follow-up'] || x.Data || '-'} • ${x['Matéria'] || 'Sem matéria'} • ${x.Atividade || ''} (${x.Status || 'Aberto'})`;
+      }
+
+      function refreshCalendarEmbed(){
+        const iframe = byId('agendaUnbFrame');
+        const base = 'https://calendar.google.com/calendar/embed?src=gustavohenriquer598%40gmail.com&ctz=America%2FSao_Paulo';
+        iframe.src = `${base}&_ts=${Date.now()}`;
+      }
+
+      window.addEventListener('load', function(){
+        initMasks();
+        refreshCalendarEmbed();
+        reloadAll();
+      });
+    </script>
+  </body>
+</html>

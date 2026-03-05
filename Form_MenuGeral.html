@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <?!= include('Estilos'); ?>
+    <?!= include('JsBase'); ?>
+  </head>
+  <body>
+    <div class="topbar">
+      <div>
+        <div class="title">Menu Geral</div>
+        <div class="sub">Escolha o ambiente que deseja acessar</div>
+      </div>
+      <span class="pill">Início</span>
+    </div>
+
+    <div class="card">
+      <h3>Selecione um módulo</h3>
+      <div class="menuGrid" style="grid-template-columns:repeat(2,minmax(200px,1fr));">
+        <button type="button" onclick="nav('Form_Menu')">CRM Corretagem</button>
+        <button type="button" class="ok" onclick="nav('Form_AgendaUnB')">Agenda UnB</button>
+      </div>
+    </div>
+  </body>
+</html>

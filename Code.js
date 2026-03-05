@@ -1,5 +1,5 @@
 /**
- * CRM Corretagem - Code.gs (COMPLETO E ATUALIZADO)
+ * CRM Pessoal - Code.gs (COMPLETO E ATUALIZADO)
  * - Web App com roteamento por ?page=
  * - Includes compartilhados (CSS/JS)
  * - Ajuste de schema: garante coluna "id" em Agenda_Visitas
@@ -12,10 +12,12 @@
  */
 
 const CFG = {
-  TITLE: "CRM Corretagem",
-  DEFAULT_PAGE: "Form_Menu",
+  TITLE: "CRM Pessoal",
+  DEFAULT_PAGE: "Form_MenuGeral",
   PAGES: {
+    "Form_MenuGeral": true,
     "Form_Menu": true,
+    "Form_AgendaUnB": true,
     "Form_BaseClientes": true,
     "Form_Estoque": true,
     "Form_LeadsCompradores": true,
@@ -227,7 +229,7 @@ function onOpen() {
   try {
     ensureSchema_();
     SpreadsheetApp.getUi()
-      .createMenu("CRM Corretagem")
+      .createMenu("CRM Pessoal")
       .addItem("Abrir Web App", "openWebApp_")
       .addSeparator()
       .addItem("Rodar ajuste de estrutura", "ensureSchema_")
@@ -246,7 +248,7 @@ function openWebApp_() {
     </div>
   `).setWidth(520).setHeight(220);
 
-  SpreadsheetApp.getUi().showModalDialog(html, "Abrir CRM Corretagem");
+  SpreadsheetApp.getUi().showModalDialog(html, "Abrir CRM Pessoal");
 }
 
 
@@ -279,6 +281,37 @@ function ensureCaptacaoSchema_(){
   }
 }
 
+function ensureAgendaUnBSchema_(){
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sh = ss.getSheetByName("Agenda_UNB");
+  const headers = [
+    "ID",
+    "Matéria",
+    "Atividade",
+    "Descrição",
+    "Data",
+    "Hora",
+    "Status",
+    "Prioridade",
+    "DataCadastro",
+    "Próximo Follow-up"
+  ];
+
+  if (!sh) sh = ss.insertSheet("Agenda_UNB");
+
+  const lc = sh.getLastColumn();
+  const current = lc > 0
+    ? sh.getRange(1, 1, 1, lc).getDisplayValues()[0].map(h => String(h || "").trim())
+    : [];
+
+  const eq = current.length === headers.length && headers.every((h, i) => h === current[i]);
+  if (!eq) {
+    sh.clear();
+    sh.getRange(1, 1, 1, headers.length).setValues([headers]);
+    sh.getRange(1, 1, 1, headers.length).setFontWeight("bold");
+  }
+}
+
 /**
  * ✅ Garante que a aba "Agenda_Visitas" tenha coluna "id" (minúsculo) na coluna A.
  * - Se existir "id" OU "ID", não altera.
@@ -293,6 +326,7 @@ function ensureSchema_(force) {
     try { ensurePropostaVendaSchema_(); } catch (e) {}
   }
   try { ensureCaptacaoSchema_(); } catch(e) {}
+  try { ensureAgendaUnBSchema_(); } catch(e) {}
 
   // colunas de apoio em abas relacionadas (independente de Agenda_Visitas existir)
   ensureColumnIfMissing_("Fato_Visitas", "Tipo_Visita");
@@ -360,6 +394,17 @@ function upsertById(sheetName, idCol, obj) {
 function deleteById(sheetName, idCol, idVal) { return DataService.deleteById(sheetName, idCol, idVal); }
 function getNextNumericId(sheetName, idCol) { return DataService.getNextNumericId(sheetName, idCol); }
 function listClientesForSelect() { return DataService.listClientesForSelect(); }
+
+/* ===============================
+   Agenda UnB wrappers
+================================ */
+
+function UNB_listAtividades(filters) { return UNBService.listAtividades(filters); }
+function UNB_getById(id) { return UNBService.getById(id); }
+function UNB_upsertAtividade(obj) { return UNBService.upsertAtividade(obj); }
+function UNB_deleteAtividade(id) { return UNBService.deleteAtividade(id); }
+function UNB_getDashboardData() { return UNBService.getDashboardData(); }
+function UNB_getFieldOptions() { return UNBService.getFieldOptions(); }
 
 /* ===============================
    VisitService wrappers (prefix VS_)

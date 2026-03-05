@@ -85,9 +85,22 @@ var UNBService = (function () {
         hoje: hoje.length,
         semana: semana.length
       },
+      all: all,
       hoje: hoje,
       semana: semana,
       materias: materias
+    };
+  }
+
+  function getFieldOptions() {
+    ensureSchema_();
+    var rows = readSheetObjects_(SHEET);
+    return {
+      materias: unique_(rows, 'Matéria'),
+      atividades: unique_(rows, 'Atividade'),
+      descricoes: unique_(rows, 'Descrição'),
+      prioridades: unique_(rows, 'Prioridade'),
+      status: unique_(rows, 'Status')
     };
   }
 
@@ -99,11 +112,21 @@ var UNBService = (function () {
     return o;
   }
 
+  function unique_(rows, key) {
+    var set = {};
+    (rows || []).forEach(function (r) {
+      var v = String(r[key] || '').trim();
+      if (v) set[v] = true;
+    });
+    return Object.keys(set).sort(function (a, b) { return a.localeCompare(b); });
+  }
+
   return {
     listAtividades: listAtividades,
     getById: getById,
     upsertAtividade: upsertAtividade,
     deleteAtividade: deleteAtividade,
-    getDashboardData: getDashboardData
+    getDashboardData: getDashboardData,
+    getFieldOptions: getFieldOptions
   };
 })();

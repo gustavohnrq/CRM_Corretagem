@@ -1,5 +1,5 @@
 /**
- * CRM Corretagem - Code.gs (COMPLETO E ATUALIZADO)
+ * CRM Pessoal - Code.gs (COMPLETO E ATUALIZADO)
  * - Web App com roteamento por ?page=
  * - Includes compartilhados (CSS/JS)
  * - Ajuste de schema: garante coluna "id" em Agenda_Visitas
@@ -12,7 +12,7 @@
  */
 
 const CFG = {
-  TITLE: "CRM Corretagem",
+  TITLE: "CRM Pessoal",
   DEFAULT_PAGE: "Form_MenuGeral",
   PAGES: {
     "Form_MenuGeral": true,
@@ -229,7 +229,7 @@ function onOpen() {
   try {
     ensureSchema_();
     SpreadsheetApp.getUi()
-      .createMenu("CRM Corretagem")
+      .createMenu("CRM Pessoal")
       .addItem("Abrir Web App", "openWebApp_")
       .addSeparator()
       .addItem("Rodar ajuste de estrutura", "ensureSchema_")
@@ -248,7 +248,7 @@ function openWebApp_() {
     </div>
   `).setWidth(520).setHeight(220);
 
-  SpreadsheetApp.getUi().showModalDialog(html, "Abrir CRM Corretagem");
+  SpreadsheetApp.getUi().showModalDialog(html, "Abrir CRM Pessoal");
 }
 
 
@@ -404,6 +404,7 @@ function UNB_getById(id) { return UNBService.getById(id); }
 function UNB_upsertAtividade(obj) { return UNBService.upsertAtividade(obj); }
 function UNB_deleteAtividade(id) { return UNBService.deleteAtividade(id); }
 function UNB_getDashboardData() { return UNBService.getDashboardData(); }
+function UNB_getFieldOptions() { return UNBService.getFieldOptions(); }
 
 /* ===============================
    VisitService wrappers (prefix VS_)

@@ -17,7 +17,8 @@ var FU_CFG = {
     { name: 'Fato_Visitas', idCandidates: ['Id_Visita', 'ID_Visita', 'id_visita'], title: 'Visita' },
     { name: 'Fato_Proposta', idCandidates: ['Id_Proposta', 'ID_ProPOSTA', 'id_proposta'], title: 'Proposta' },
     { name: 'Fato_Venda', idCandidates: ['Id_Venda', 'id_venda'], title: 'Venda' },
-    { name: 'Fato_Captacao', idCandidates: ['Código', 'Codigo', 'ID', 'Id', 'id'], title: 'Captação' }
+    { name: 'Fato_Captacao', idCandidates: ['Código', 'Codigo', 'ID', 'Id', 'id'], title: 'Captação' },
+    { name: 'Agenda_UNB', idCandidates: ['ID', 'Id', 'id'], title: 'Agenda UnB' }
   ],
   FOLLOWUP_CANDIDATES: ['Próximo Follow-up'],
   DATE_CANDIDATES: ['Data', 'DataCadastro', 'Data_Visita', 'Data de Entrada', 'Data Entrada'],
@@ -374,6 +375,12 @@ function FU_resolveTimeWindow_(item) {
 
 
 function FU_buildEventTitle_(item) {
+  if (item.sheetName === 'Agenda_UNB') {
+    var materia = FU_pick_(item.row, ['Matéria', 'Materia']) || 'Atividade';
+    var atividade = FU_pick_(item.row, ['Atividade']) || ('ID ' + item.recordId);
+    return 'UNB - ' + materia + ' - ' + atividade;
+  }
+
   if (item.sheetName === 'Agenda_Visitas') {
     var tipoVisita = FU_pick_(item.row, ['Venda ou Cap?']) || 'Visita';
     return 'Visita de ' + tipoVisita;
@@ -484,6 +491,18 @@ function FU_buildEventDescription_(item) {
 
 function FU_buildHumanLine_(item) {
   var bits = [];
+
+  if (item.sheetName === 'Agenda_UNB') {
+    bits.push('UNB #' + item.recordId);
+    var materia = FU_pick_(item.row, ['Matéria', 'Materia']);
+    var atividade = FU_pick_(item.row, ['Atividade']);
+    var status = FU_pick_(item.row, ['Status']);
+    if (materia) bits.push('Matéria: ' + materia);
+    if (atividade) bits.push('Atividade: ' + atividade);
+    if (status) bits.push('Status: ' + status);
+    return bits.join(' • ');
+  }
+
   bits.push(item.sheetName + ' #' + item.recordId);
   if (item.details && item.details.base) {
     var b = item.details.base;

@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <?!= include('Estilos'); ?>
+    <?!= include('JsBase'); ?>
+  </head>
+  <body>
+    <div class="topbar">
+      <div>
+        <div class="title">Agenda UnB</div>
+        <div class="sub">Controle simples das atividades das matérias</div>
+      </div>
+      <span class="pill">UnB</span>
+    </div>
+
+    <div class="btns" style="margin-bottom:12px;">
+      <button type="button" class="secondary" onclick="nav('Form_MenuGeral')">← Menu Geral</button>
+      <button type="button" class="secondary" onclick="syncAgendaNow()">Atualizar agenda agora</button>
+    </div>
+
+    <div class="card">
+      <h3>Cadastrar atividade</h3>
+      <form id="frmUnb" onsubmit="saveAtividade(event)">
+        <div class="row">
+          <div><label>ID</label><input id="ID" name="ID" placeholder="Automático" /></div>
+          <div><label>Matéria</label><input id="Matéria" name="Matéria" required /></div>
+        </div>
+        <div class="row">
+          <div><label>Atividade</label><input id="Atividade" name="Atividade" required /></div>
+          <div><label>Descrição</label><input id="Descrição" name="Descrição" /></div>
+        </div>
+        <div class="row">
+          <div><label>Data</label><input type="date" id="Data" name="Data" required /></div>
+          <div><label>Hora</label><input type="time" id="Hora" name="Hora" /></div>
+        </div>
+        <div class="row">
+          <div>
+            <label>Status</label>
+            <select id="Status" name="Status">
+              <option>Aberto</option>
+              <option>Em andamento</option>
+              <option>Concluído</option>
+            </select>
+          </div>
+          <div>
+            <label>Prioridade</label>
+            <select id="Prioridade" name="Prioridade">
+              <option>Média</option>
+              <option>Alta</option>
+              <option>Baixa</option>
+            </select>
+          </div>
+        </div>
+        <div class="btns">
+          <button type="submit" class="ok">Salvar atividade</button>
+          <button type="button" class="secondary" onclick="clearForm('frmUnb')">Limpar</button>
+          <button type="button" class="danger" onclick="deleteAtividade()">Excluir</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="grid" style="grid-template-columns:1fr 1fr; gap:12px;">
+      <div class="card" style="margin:0;">
+        <h3>Dashboard</h3>
+        <div id="kpisUnb" class="hint"></div>
+        <h4 style="margin:10px 0 6px;">Atividades por matéria</h4>
+        <div id="materiasUnb" class="list"></div>
+      </div>
+      <div class="card" style="margin:0;">
+        <h3>Tarefas de hoje</h3>
+        <div id="hojeUnb" class="list"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Próximos 7 dias</h3>
+      <div id="semanaUnb" class="list"></div>
+    </div>
+
+    <script>
+      function syncAgendaNow(){
+        google.script.run
+          .withSuccessHandler(function(r){ toast(`Agenda atualizada. Criados: ${r.calendar.created}, atualizados: ${r.calendar.updated}.`); })
+          .withFailureHandler(function(e){ toast(e.message || e); })
+          .FU_syncAgendaNow_v1();
+      }
+
+      function saveAtividade(ev){
+        ev.preventDefault();
+        const obj = formToObject('frmUnb');
+        google.script.run
+          .withSuccessHandler(function(){
+            toast('Atividade salva com sucesso.');
+            clearForm('frmUnb');
+            loadDashboard();
+          })
+          .withFailureHandler(function(e){ toast(e.message || e); })
+          .UNB_upsertAtividade(obj);
+      }
+
+      function deleteAtividade(){
+        const id = byId('ID').value.trim();
+        if (!id) return toast('Informe o ID para excluir.');
+        google.script.run
+          .withSuccessHandler(function(){ toast('Atividade excluída.'); clearForm('frmUnb'); loadDashboard(); })
+          .withFailureHandler(function(e){ toast(e.message || e); })
+          .UNB_deleteAtividade(id);
+      }
+
+      function loadDashboard(){
+        google.script.run
+          .withSuccessHandler(renderDashboard)
+          .withFailureHandler(function(e){ toast(e.message || e); })
+          .UNB_getDashboardData();
+      }
+
+      function renderDashboard(d){
+        byId('kpisUnb').innerHTML = `Total: <b>${d.totais.total}</b> • Abertas: <b>${d.totais.abertas}</b> • Hoje: <b>${d.totais.hoje}</b> • 7 dias: <b>${d.totais.semana}</b>`;
+
+        renderSimple('materiasUnb', d.materias, function(x){ return `${x.materia} • ${x.qtd}`; });
+        renderSimple('hojeUnb', d.hoje, formatAtividade);
+        renderSimple('semanaUnb', d.semana, formatAtividade);
+      }
+
+      function renderSimple(elId, arr, mapFn){
+        const el = byId(elId);
+        el.innerHTML = '';
+        if (!arr || !arr.length){
+          el.innerHTML = '<div class="hint">Sem itens.</div>';
+          return;
+        }
+        arr.forEach(function(x){
+          const div = document.createElement('div');
+          div.className = 'item';
+          div.innerHTML = `<small>${escapeHtml(mapFn(x))}</small>`;
+          div.onclick = function(){
+            setFormFromObject('frmUnb', x);
+          };
+          el.appendChild(div);
+        });
+      }
+
+      function formatAtividade(x){
+        return `${x['Próximo Follow-up'] || x.Data || '-'} • ${x['Matéria'] || 'Sem matéria'} • ${x.Atividade || ''} (${x.Status || 'Aberto'})`;
+      }
+
+      window.addEventListener('load', function(){
+        initMasks();
+        loadDashboard();
+      });
+    </script>
+  </body>
+</html>

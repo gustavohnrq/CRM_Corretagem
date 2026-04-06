@@ -383,12 +383,30 @@ function FU_buildEventTitle_(item) {
 
   if (item.sheetName === 'Agenda_Visitas') {
     var tipoVisita = FU_pick_(item.row, ['Venda ou Cap?']) || 'Visita';
-    return 'Visita de ' + tipoVisita;
+    var clienteNome = FU_resolveAgendaClienteNome_(item.row);
+    return 'Visita ' + tipoVisita + (clienteNome ? (' ' + clienteNome) : '');
   }
 
   var cfg = FU_getSheetConfig_(item.sheetName);
   var base = (cfg.title || item.sheetName || 'Registro');
   return 'Follow Up ' + base + ' - ' + item.recordId;
+}
+
+function FU_resolveAgendaClienteNome_(row) {
+  var nomeDireto = FU_pick_(row, ['Nome Completo', 'Nome do Cliente', 'Cliente_Nome']);
+  if (nomeDireto) return String(nomeDireto).trim();
+
+  var idCliente = FU_pick_(row, ['Id_Cliente', 'ID_Cliente', 'Cliente']);
+  idCliente = String(idCliente || '').trim();
+  if (!idCliente) return '';
+
+  try {
+    var cli = DataService.getById('Base_Clientes', 'ID', idCliente);
+    if (!cli) return idCliente;
+    return String(cli['Nome Completo'] || cli['Nome'] || idCliente).trim();
+  } catch (e) {
+    return idCliente;
+  }
 }
 
 
@@ -484,6 +502,13 @@ function FU_buildEventDescription_(item) {
     if (b.valor) lines.push('Valor: ' + b.valor);
     if (b.status) lines.push('Status: ' + b.status);
     if (b.bairro) lines.push('Bairro: ' + b.bairro);
+  }
+
+  if (item.sheetName === 'Agenda_Visitas') {
+    var quadra = FU_pick_(item.row, ['Quadra', 'Quadra/Endereço', 'Endereco', 'Endereço']);
+    if (quadra) lines.push('Quadra: ' + quadra);
+    var idCliente = FU_pick_(item.row, ['Id_Cliente', 'ID_Cliente', 'Cliente']);
+    if (idCliente) lines.push('Id_Cliente: ' + idCliente);
   }
 
   return lines.join('\n');

@@ -62,7 +62,7 @@
           </div>
 
           <label>Cliente (ID)</label>
-          <select name="Cliente" id="clienteSelect"></select>
+          <select name="Id_Cliente" id="clienteSelect"></select>
 
           <label>Imóvel (Código)</label>
           <input id="imovelSearch" placeholder="Pesquisar imóvel por código, bairro, tipo..." />
@@ -200,7 +200,7 @@
                   setFormFromObject("form", obj);
                   // mantém selects coerentes
                   byId("tipoVisitaSelect").value = obj["Venda ou Cap?"] || "";
-                  byId("clienteSelect").value = obj["Cliente"] || "";
+                  byId("clienteSelect").value = obj["Id_Cliente"] || obj["Cliente"] || "";
                   byId("imovelSearch").value = "";
                   renderImoveisSelect_(imoveisCache, obj["Imóvel (Código)"] || "");
                 })
@@ -230,7 +230,10 @@
           const obj = formToObject("form");
 
           obj["Venda ou Cap?"] = byId("tipoVisitaSelect").value || obj["Venda ou Cap?"] || "";
-          obj["Cliente"] = byId("clienteSelect").value || obj["Cliente"] || "";
+          const clienteId = byId("clienteSelect").value || obj["Id_Cliente"] || obj["Cliente"] || "";
+          obj["Id_Cliente"] = clienteId;
+          // Compatibilidade com planilhas legadas que ainda usam coluna "Cliente"
+          obj["Cliente"] = clienteId;
           obj["Imóvel (Código)"] = byId("imovelSelect").value || obj["Imóvel (Código)"] || "";
 
           obj["Telefone"] = String(obj["Telefone"]||"").replace(/\D/g,"").trim();
@@ -251,7 +254,7 @@
               obj[IDCOL] = res.id;
               setFormFromObject("form", obj);
               byId("tipoVisitaSelect").value = obj["Venda ou Cap?"] || "";
-              byId("clienteSelect").value = obj["Cliente"] || "";
+              byId("clienteSelect").value = obj["Id_Cliente"] || obj["Cliente"] || "";
               byId("imovelSearch").value = "";
               renderImoveisSelect_(imoveisCache, obj["Imóvel (Código)"] || "");
               loadList();
